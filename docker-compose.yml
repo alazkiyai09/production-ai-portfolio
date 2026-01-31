@@ -1,0 +1,169 @@
+# Docker Compose configuration for AgenticFlow
+# Multi-container setup for development and production
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # FastAPI Backend Service
+  # =============================================================================
+  agenticflow-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: agenticflow-api:latest
+    container_name: agenticflow-api
+    ports:
+      - "${API_PORT:-8001}:8000"
+    environment:
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - CORS_ENABLED=true
+
+      # LLM API Keys (set in .env)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Search API Keys
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+
+      # Model Configuration
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-gpt-4o-mini}
+      - FALLBACK_MODEL=${FALLBACK_MODEL:-gpt-3.5-turbo}
+      - MODEL_TEMPERATURE=${MODEL_TEMPERATURE:-0.7}
+
+      # Workflow Configuration
+      - MAX_ITERATIONS=${MAX_ITERATIONS:-10}
+      - TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-300}
+      - ENABLE_HUMAN_CHECKPOINT=${ENABLE_HUMAN_CHECKPOINT:-true}
+
+      # Checkpoint Storage
+      - CHECKPOINT_STORAGE=${CHECKPOINT_STORAGE:-memory}
+      - SQLITE_CHECKPOINT_PATH=/app/data/checkpoints.db
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FILE=${LOG_FILE:-/app/logs/agenticflow.log}
+
+      # Workspace
+      - WORKSPACE_ROOT=/app/workspace
+
+      # Redis (optional)
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+    volumes:
+      # Persist data and checkpoints
+      - agenticflow-data:/app/data
+      - agenticflow-logs:/app/logs
+      - agenticflow-workspace:/app/workspace
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - agenticflow-network
+
+  # =============================================================================
+  # Streamlit UI Service
+  # =============================================================================
+  agenticflow-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: agenticflow-api:latest  # Same image, different command
+    container_name: agenticflow-ui
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    environment:
+      # Streamlit Configuration
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+
+      # API URL (for UI to connect to backend)
+      - API_BASE_URL=http://agenticflow-api:8000/api/v1
+    command: ["streamlit", "run", "src/ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    depends_on:
+      agenticflow-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - agenticflow-network
+
+  # =============================================================================
+  # Redis Cache (Optional - for production)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: agenticflow-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - agenticflow-network
+    profiles:
+      - production  # Only include with --profile production
+
+  # =============================================================================
+  # Nginx Reverse Proxy (Optional - for production)
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: agenticflow-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - agenticflow-api
+      - agenticflow-ui
+    restart: unless-stopped
+    networks:
+      - agenticflow-network
+    profiles:
+      - production
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  agenticflow-data:
+    driver: local
+  agenticflow-logs:
+    driver: local
+  agenticflow-workspace:
+    driver: local
+  redis-data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  agenticflow-network:
+    driver: bridge

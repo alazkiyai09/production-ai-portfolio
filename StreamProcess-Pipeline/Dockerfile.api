@@ -1,0 +1,113 @@
+# Multi-stage Dockerfile for FastAPI Service
+# StreamProcess-Pipeline API
+
+# ============================================================================
+# Stage 1: Builder
+# ============================================================================
+FROM python:3.11-slim as builder
+
+# Set build arguments
+ARG PYTHON_VERSION=3.11
+
+# Set environment variables for build
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install -r requirements.txt
+
+# ============================================================================
+# Stage 2: Runtime
+# ============================================================================
+FROM python:3.11-slim as runtime
+
+# Set runtime arguments
+ARG PYTHON_VERSION=3.11
+ARG APP_USER=appuser
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PYTHONPATH" \
+    PYTHONPATH="/app:$PYTHONPATH" \
+    APP_USER=${APP_USER} \
+    APP_UID=${APP_UID} \
+    APP_GID=${APP_GID}
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -g ${APP_GID} ${APP_USER} && \
+    useradd -u ${APP_UID} -g ${APP_GID} -m -s /bin/bash ${APP_USER}
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Create application directory structure
+WORKDIR /app
+RUN mkdir -p /app/data /app/cache /app/logs /app/tmp && \
+    chown -R ${APP_USER}:${APP_USER} /app
+
+# Copy application code
+COPY --chown=${APP_USER}:${APP_USER} src/ /app/src/
+COPY --chown=${APP_USER}:${APP_USER} pyproject.toml .
+
+# Switch to non-root user
+USER ${APP_USER}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose ports
+EXPOSE 8000 9090
+
+# Default command
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+
+# ============================================================================
+# Stage 3: Development (optional)
+# ============================================================================
+FROM runtime as development
+
+# Install development tools
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    vim \
+    htop \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install development dependencies
+RUN pip install --upgrade pip && \
+    pip install -e ".[dev]"
+
+USER ${APP_USER}
+
+# Enable auto-reload for development
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]

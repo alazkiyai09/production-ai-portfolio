@@ -1,0 +1,92 @@
+# ============================================================
+# Enterprise-RAG: Development Docker Compose
+# ============================================================
+# Development configuration with hot reload and ChromaDB
+
+version: '3.8'
+
+services:
+  # ============================================================
+  # RAG API Service (Development)
+  # ============================================================
+  rag-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: enterprise-rag-api-dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Development Settings
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=text
+
+      # LLM Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+
+      # Embedding & Retrieval
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+      - CHUNK_SIZE=512
+      - CHUNK_OVERLAP=50
+      - TOP_K_RETRIEVAL=20
+      - TOP_K_RERANK=5
+      - ENABLE_BM25=true
+      - ENABLE_HYBRID_SEARCH=true
+
+      # Vector Database - ChromaDB for development
+      - VECTOR_STORE_TYPE=chroma
+      - CHROMA_PATH=./data/chroma
+
+      # Evaluation
+      - ENABLE_EVALUATION=${ENABLE_EVALUATION:-true}
+    volumes:
+      # Mount source for hot reload
+      - ./src:/app/src
+      - ./data/documents:/app/data/documents
+      - ./data/chroma:/app/data/chroma
+      - ./logs:/app/logs
+    command: >
+      uvicorn src.api.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --log-level debug
+    networks:
+      - rag-network
+
+  # ============================================================
+  # Streamlit UI (Development)
+  # ============================================================
+  rag-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: enterprise-rag-ui-dev
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - RAG_API_URL=http://rag-api:8000
+    command: >
+      streamlit run src/ui/app.py
+      --server.port=8501
+      --server.address=0.0.0.0
+      --server.headless=true
+      --server.runOnSave=true
+    volumes:
+      - ./src:/app/src
+      - ./data/documents:/app/data/documents
+    depends_on:
+      - rag-api
+    networks:
+      - rag-network
+
+networks:
+  rag-network:
+    driver: bridge
+    name: enterprise-rag-dev-network

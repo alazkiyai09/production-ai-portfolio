@@ -1,0 +1,13 @@
+---
+# Namespace for StreamProcess-Pipeline
+# Creates a dedicated namespace to isolate all pipeline resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: streamprocess
+  labels:
+    app: streamprocess-pipeline
+    environment: production
+    # Team/owner labels for resource organization
+    team: data-platform
+    tier: backend

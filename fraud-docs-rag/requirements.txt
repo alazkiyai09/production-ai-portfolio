@@ -1,0 +1,69 @@
+# RAG Framework
+llama-index-core==0.10.80
+llama-index-llms-ollama==0.3.4
+llama-index-llms-openai==0.2.3
+llama-index-llms-gemini==0.3.2
+llama-index-embeddings-huggingface==0.3.2
+llama-index-vector-stores-chroma==0.1.16
+llama-index-postprocessor-rerank==0.2.3
+llama-index-readers-file==0.1.30
+llama-index-readers-web==0.1.23
+
+# Vector Database
+chromadb==0.5.5
+
+# Web Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
+python-multipart==0.0.12
+
+# LLM & Embedding Providers
+ollama==0.4.1
+openai==1.55.0
+httpx==0.27.2
+
+# Reranking
+sentence-transformers==3.3.1
+colbert-ai==0.4.0
+
+# Document Processing
+pypdf==5.1.0
+python-docx==1.1.2
+python-pptx==1.0.2
+pillow==11.0.0
+unstructured==0.15.14
+unstructured[local-inference]==0.15.14
+pdf2image==1.17.0
+pdfminer-six==20240706
+pikepdf==9.3.0
+
+# Utilities
+python-dotenv==1.0.1
+aiofiles==24.1.0
+python-json-logger==2.0.7
+tenacity==9.0.0
+
+# Logging
+loguru==0.7.2
+rich==13.9.4
+
+# Development & Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+
+# Code Quality
+black==24.10.0
+ruff==0.8.4
+mypy==1.13.0
+pre-commit==4.0.1
+
+# Type Stubs
+types-requests==2.32.0.20241016
+types-aiofiles==24.1.0.20240626
+
+# Monitoring (optional)
+prometheus-client==0.21.0

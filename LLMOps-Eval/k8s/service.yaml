@@ -1,0 +1,173 @@
+# Kubernetes Service for LLMOps-Eval API
+#
+# Exposes the API via:
+# - ClusterIP (for internal cluster access)
+# - NodePort (for external access)
+# - LoadBalancer (optional, for cloud providers)
+
+---
+# ClusterIP Service (Internal)
+apiVersion: v1
+kind: Service
+metadata:
+  name: llmops-eval-api
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: api
+spec:
+  type: ClusterIP
+  selector:
+    app: llmops-eval
+    component: api
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+    protocol: TCP
+
+---
+# NodePort Service (External)
+apiVersion: v1
+kind: Service
+metadata:
+  name: llmops-eval-api-nodeport
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: api
+spec:
+  type: NodePort
+  selector:
+    app: llmops-eval
+    component: api
+  ports:
+  - name: http
+    port: 8002
+    targetPort: http
+    nodePort: 30802
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# LoadBalancer Service (Optional - for cloud providers)
+apiVersion: v1
+kind: Service
+metadata:
+  name: llmops-eval-api-lb
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: api
+  annotations:
+    # AWS annotations
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+    # GCP annotations
+    cloud.google.com/load-balancer-type: "Internal"
+    # Azure annotations
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  type: LoadBalancer
+  loadBalancerIP: null  # Set static IP if needed
+  selector:
+    app: llmops-eval
+    component: api
+  ports:
+  - name: http
+    port: 8002
+    targetPort: http
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+# Service for Dashboard (ClusterIP only - usually accessed via Ingress)
+apiVersion: v1
+kind: Service
+metadata:
+  name: llmops-eval-dashboard
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: dashboard
+spec:
+  type: ClusterIP
+  selector:
+    app: llmops-eval
+    component: dashboard
+  ports:
+  - name: http
+    port: 8501
+    targetPort: 8501
+    protocol: TCP
+
+---
+# Headless Service for StatefulSet (if using database)
+apiVersion: v1
+kind: Service
+metadata:
+  name: llmops-eval-api-headless
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: api
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: llmops-eval
+    component: api
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+    protocol: TCP
+
+---
+# Endpoints for external Prometheus (if not running in cluster)
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: llmops-eval-prometheus
+  namespace: default
+subsets:
+- addresses:
+  - ip: 172.18.0.1  # Change to your Prometheus IP
+  ports:
+  - name: http
+    port: 9090
+    protocol: TCP
+
+---
+# Service Monitor for Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: llmops-eval-api
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: api
+spec:
+  selector:
+    matchLabels:
+      app: llmops-eval
+      component: api
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /prometheus
+    scheme: http
+  namespaceSelector:
+    matchNames:
+    - default

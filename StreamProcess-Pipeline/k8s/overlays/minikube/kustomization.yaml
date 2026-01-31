@@ -1,0 +1,71 @@
+# Minikube Overlay for Local Development
+# Usage: kubectl apply -k k8s/overlays/minikube
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: streamprocess
+
+# Base configuration
+../..
+
+# ConfigMap overrides for minikube
+configMapGenerator:
+  - name: streamprocess-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+      - POSTGRES_HOST=postgres-service
+      - REDIS_HOST=redis-service
+      - CHROMA_HOST=chroma-service
+      - EMBEDDING_MODEL_DEVICE=cpu
+      - METRICS_ENABLED=true
+
+# Use local image (no registry)
+images:
+  - name: streamprocess-pipeline
+    newName: streamprocess-pipeline
+    newTag: latest
+
+# Single replica for local development
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: streamprocess-api
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: streamprocess-worker
+
+# Add hostPath volumes for persistence (Docker Desktop specific)
+patchesStrategicMerge:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: streamprocess-worker
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: model-cache
+              hostPath:
+                path: /tmp/streamprocess/models
+                type: DirectoryOrCreate
+
+# Disable HPA for local development (not needed with single replica)
+patchesJson6902:
+  # Remove HPA resources
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      [{"op": "remove", "path": "/metadata/labels"}]

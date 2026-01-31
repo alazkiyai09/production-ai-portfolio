@@ -1,0 +1,181 @@
+# Docker Compose configuration for DataChat-RAG
+# Production-ready stack with all services
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: datachat-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-datachat_rag}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-datachat_rag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - datachat-network
+    restart: unless-stopped
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: datachat-chromadb
+    environment:
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
+      - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_AUTH_TOKEN:-datachat-token-123}
+      - CHROMA_SERVER_AUTH_CREDENTIALS_FILE=/chroma/.chroma/token
+      - PERSIST_DIRECTORY=/chroma/chroma
+    ports:
+      - "${CHROMA_PORT:-8001}:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - datachat-network
+    restart: unless-stopped
+
+  # FastAPI Application
+  datachat-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: datachat-api
+    environment:
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-datachat_rag}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+
+      # ChromaDB
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      CHROMA_PERSIST_DIR: /app/data/chromadb
+      CHROMA_AUTH_TOKEN: ${CHROMA_AUTH_TOKEN:-datachat-token-123}
+
+      # API
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      APP_NAME: DataChat-RAG
+      APP_ENV: production
+      DEBUG: "false"
+
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+
+      # Cohere (optional)
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+
+      # RAG Settings
+      CHUNK_SIZE: ${CHUNK_SIZE:-512}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-50}
+      TOP_K_RETRIEVAL: ${TOP_K_RETRIEVAL:-5}
+      RERANK_ENABLED: ${RERANK_ENABLED:-false}
+      RERANK_TOP_N: ${RERANK_TOP_N:-3}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - chroma_data:/app/data/chromadb
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - datachat-network
+    restart: unless-stopped
+
+  # Streamlit UI
+  datachat-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: streamlit
+    container_name: datachat-ui
+    environment:
+      API_BASE_URL: http://datachat-api:8000
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    depends_on:
+      datachat-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - datachat-network
+    restart: unless-stopped
+
+  # Initialization Service (runs once)
+  datachat-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: datachat-init
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-datachat_rag}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./scripts:/app/scripts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    networks:
+      - datachat-network
+    command: python /app/scripts/init_docker.py
+    restart: "no"
+
+# Networks
+networks:
+  datachat-network:
+    driver: bridge
+    name: datachat-network
+
+# Volumes
+volumes:
+  postgres_data:
+    name: datachat-postgres-data
+  chroma_data:
+    name: datachat-chromadb-data

@@ -1,0 +1,93 @@
+# Development Overlay
+# Usage: kubectl apply -k k8s/overlays/development
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: streamprocess-dev
+
+# Base configuration
+../..
+
+# Common labels for development
+commonLabels:
+  environment: development
+  tier: dev
+
+# ConfigMap overrides
+configMapGenerator:
+  - name: streamprocess-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+      - API_WORKERS=1
+      - CELERY_WORKER_CONCURRENCY=2
+
+# Image overrides for development
+images:
+  - name: streamprocess-pipeline
+    newName: streamprocess-pipeline
+    newTag: dev
+
+# Reduce replicas for development
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: streamprocess-api
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: streamprocess-worker
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: streamprocess-flower
+
+# Reduce resource requests/limits for development
+patchesStrategicMerge:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: streamprocess-api
+    spec:
+      template:
+        spec:
+          containers:
+            - name: api
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: streamprocess-worker
+    spec:
+      template:
+        spec:
+          containers:
+            - name: worker
+              resources:
+                requests:
+                  memory: "512Mi"
+                  cpu: "500m"
+                limits:
+                  memory: "1Gi"
+                  cpu: "1000m"

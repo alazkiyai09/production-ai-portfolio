@@ -1,0 +1,206 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamprocess-pipeline"
+version = "1.0.0"
+description = "High-throughput data processing pipeline for LLM applications"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["pipeline", "llm", "kafka", "celery", "vector-database", "adtech"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "celery[redis]>=5.4.0",
+    "redis>=5.2.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "chromadb>=0.6.0",
+    "sentence-transformers>=3.3.0",
+    "prometheus-client>=0.21.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "click>=8.1.0",
+    "rich>=13.9.0",
+    "tenacity>=9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "httpx>=0.28.0",
+    "faker>=33.0.0",
+    "black>=24.10.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+]
+kafka = [
+    "kafka-python>=2.0.0",
+    "aiokafka>=0.12.0",
+]
+qdrant = [
+    "qdrant-client>=1.12.0",
+]
+all = [
+    "streamprocess-pipeline[dev,kafka,qdrant]",
+]
+
+[project.scripts]
+streamprocess = "src.cli:main"
+streamprocess-api = "src.api.main:main"
+streamprocess-worker = "src.processing.worker:main"
+streamprocess-flower = "src.processing.monitoring:flower_main"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/streamprocess-pipeline"
+Documentation = "https://github.com/yourusername/streamprocess-pipeline/docs"
+Repository = "https://github.com/yourusername/streamprocess-pipeline"
+Issues = "https://github.com/yourusername/streamprocess-pipeline/issues"
+
+# Black Configuration
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # Directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# Ruff Configuration
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # Pyflakes
+    "I",     # isort
+    "C",     # flake8-comprehensions
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "ARG",   # flake8-unused-arguments
+    "SIM",   # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*.py" = ["ARG", "S"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+# MyPy Configuration
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+follow_imports = "normal"
+strict_optional = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    "kafka.*",
+    "chromadb.*",
+    "sentence_transformers.*",
+]
+ignore_missing_imports = true
+
+# Pytest Configuration
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "kafka: marks tests requiring Kafka",
+    "k8s: marks tests requiring Kubernetes",
+]
+
+# Coverage Configuration
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"

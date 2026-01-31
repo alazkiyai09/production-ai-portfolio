@@ -1,0 +1,333 @@
+# Kubernetes ConfigMap for LLMOps-Eval
+#
+# Contains configuration settings that are not sensitive
+
+---
+# Main ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llmops-eval-config
+  namespace: default
+  labels:
+    app: llmops-eval
+data:
+  # Logging
+  LOG_LEVEL: "INFO"
+
+  # Evaluation Settings
+  MAX_CONCURRENT_EVALUATIONS: "10"
+  REQUEST_TIMEOUT: "120"
+  MAX_RETRIES: "3"
+
+  # Cache
+  ENABLE_CACHE: "true"
+  CACHE_TTL: "3600"
+
+  # API Configuration
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+
+  # CORS Origins (comma-separated)
+  CORS_ORIGINS: "http://localhost:8502,http://localhost:3001"
+
+  # Directories
+  DATA_DIR: "/app/data"
+  DATASETS_DIR: "/app/data/datasets"
+  RESULTS_DIR: "/app/data/results"
+  CACHE_DIR: "/app/data/cache"
+  MODELS_DIR: "/app/data/models"
+
+  # Metrics
+  ENABLE_METRICS: "true"
+  METRICS_PORT: "9090"
+  METRICS_ENDPOINT: "/metrics"
+
+  # Dashboard
+  DASHBOARD_HOST: "0.0.0.0"
+  DASHBOARD_PORT: "8501"
+
+---
+# Sample Dataset ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llmops-eval-datasets
+  namespace: default
+  labels:
+    app: llmops-eval
+data:
+  qa_evaluation.yaml: |
+    name: qa_evaluation
+    version: "1.0"
+    description: "Question-answering evaluation dataset"
+    default_metrics:
+      - semantic_similarity
+      - llm_judge
+      - latency
+    test_cases:
+      - id: qa_001
+        prompt: "What is the capital of France?"
+        expected: "Paris"
+        category: "factual"
+        tags: ["geography", "simple"]
+        metrics: ["exact_match", "latency"]
+      - id: qa_002
+        prompt: "Explain quantum entanglement."
+        expected: "Quantum entanglement is when two particles become linked."
+        category: "explanation"
+        tags: ["science", "physics"]
+        metrics: ["llm_judge", "semantic_similarity"]
+
+  code_evaluation.yaml: |
+    name: code_evaluation
+    version: "1.0"
+    description: "Code generation evaluation"
+    default_metrics:
+      - format
+      - llm_judge
+    test_cases:
+      - id: code_001
+        prompt: "Write a Python function to reverse a string."
+        expected: |
+          def reverse_string(s):
+              return s[::-1]
+        category: "code"
+        tags: ["python", "strings"]
+
+---
+# Prometheus ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: default
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'llmops-eval-k8s'
+        environment: 'production'
+
+    scrape_configs:
+      # LLMOps-Eval API
+      - job_name: 'llmops-eval-api'
+        scrape_interval: 30s
+        metrics_path: '/prometheus'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - default
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: llmops-eval
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_label_component]
+            regex: api
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      # Kubelet metrics (optional)
+      - job_name: 'kubernetes-nodes'
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              # - alertmanager:9093
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+---
+# Prometheus Alert Rules
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: default
+data:
+  llmops-eval-rules.yml: |
+    groups:
+      - name: llmops_eval_alerts
+        interval: 30s
+        rules:
+          - alert: HighEvaluationFailureRate
+            expr: |
+              rate(evaluations_total{status="failed"}[5m]) / rate(evaluations_total[5m]) > 0.2
+            for: 5m
+            labels:
+              severity: warning
+              component: evaluation
+            annotations:
+              summary: "High evaluation failure rate"
+              description: "More than 20% of evaluations are failing"
+
+          - alert: HighLLMErrorRate
+            expr: |
+              rate(llm_requests_total{status="error"}[5m]) / rate(llm_requests_total[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High LLM error rate"
+
+          - alert: HighPodCPUUsage
+            expr: |
+              rate(container_cpu_usage_seconds_total{pod=~"llmops-eval-.*"}[5m]) > 1.5
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High CPU usage detected"
+
+          - alert: HighPodMemoryUsage
+            expr: |
+              container_memory_working_set_bytes{pod=~"llmops-eval-.*"} / 1024 / 1024 / 1024 > 1.5
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage detected"
+
+---
+# Grafana Dashboard Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard
+  namespace: default
+  labels:
+    grafana_dashboard: "1"
+data:
+  llmops-eval-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "LLMOps-Eval",
+        "tags": ["llmops", "evaluation"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Evaluations Total",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(evaluations_total[5m])",
+                "legendFormat": "{{dataset}} - {{status}}"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "LLM Requests",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(llm_requests_total[5m])",
+                "legendFormat": "{{provider}}:{{model}}"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+# Ingress ConfigMap (for NGINX)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-ingress-config
+  namespace: default
+data:
+  # Rate limiting
+  rate-limit: "100"
+
+  # CORS settings
+  cors-allow-origin: "*"
+  cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+  cors-allow-headers: "Authorization, Content-Type"
+
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: llmops-eval
+  namespace: default
+  labels:
+    app: llmops-eval
+automountServiceAccountToken: false
+
+---
+# Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: llmops-eval
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: llmops-eval
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: llmops-eval
+subjects:
+- kind: ServiceAccount
+  name: llmops-eval
+  namespace: default
+
+---
+# Persistent Volume Claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llmops-eval-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llmops-eval-reports
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard

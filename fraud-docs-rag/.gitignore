@@ -1,0 +1,127 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pytest
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.log
+.cache
+nosetests.xml
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+ruff.toml
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Data directories
+data/documents/*
+!data/documents/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+data/vector_store/*
+!data/vector_store/.gitkeep
+data/chroma_db/*
+!data/chroma_db/.gitkeep
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+*.log.*
+
+# ChromaDB
+chroma/
+.chroma/
+
+# Models and caches
+models/
+.cache/
+*.bin
+*.safetensors
+*.gguf
+*.ckpt
+*.pth
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+tmp/
+temp/
+
+# Prometheus
+prometheus_data/
+
+# Local development
+docker-compose.override.yml
+.dockerignore

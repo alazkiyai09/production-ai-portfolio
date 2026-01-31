@@ -1,0 +1,129 @@
+# Kustomization for StreamProcess-Pipeline
+# Build: kustomize build . | kubectl apply -f -
+# Or: kubectl apply -k .
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: streamprocess
+
+# Resources to deploy
+resources:
+  # Core infrastructure
+  - 00-namespace.yaml
+  - 01-configmap.yaml
+  - 02-secret.yaml
+  - 09-network-policy.yaml
+
+  # Services
+  - 05-services.yaml
+
+  # Applications
+  - postgres-statefulset.yaml
+  - redis-deployment.yaml
+  - chroma-deployment.yaml
+  - 03-deployment-api.yaml
+  - 04-deployment-worker.yaml
+  - flower-deployment.yaml
+
+  # Networking
+  - 06-ingress.yaml
+
+  # Availability
+  - 07-pdb.yaml
+
+  # Monitoring (only if Prometheus Operator is installed)
+  - 08-servicemonitor.yaml
+
+# Common labels applied to all resources
+commonLabels:
+  app: streamprocess-pipeline
+  app.kubernetes.io/name: streamprocess-pipeline
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/component: backend
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/created-by: engineer
+
+# Images to override
+images:
+  - name: streamprocess-pipeline
+    newName: streamprocess-pipeline
+    newTag: "1.0.0"
+  # For local development with different registry:
+  # - name: streamprocess-pipeline
+  #   newName: localhost:5000/streamprocess-pipeline
+  #   newTag: dev
+
+# ConfigMap generator with environment-specific overrides
+configMapGenerator:
+  - name: streamprocess-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - DEBUG=false
+  # Override for dev/staging:
+  # - name: streamprocess-config-dev
+  #   behavior: create
+  #   literals:
+  #     - ENVIRONMENT=development
+  #     - LOG_LEVEL=DEBUG
+  #     - DEBUG=true
+
+# Secret generator (for demo only - use sealed-secrets in production!)
+secretGenerator:
+  - name: streamprocess-secret
+    behavior: merge
+    literals:
+      # WARNING: Change these in production!
+      - POSTGRES_PASSWORD=change-this-in-production
+      - SECRET_KEY=change-this-secret-key-in-production
+      - FLOWER_BASIC_AUTH=admin:change-this-flower-password
+
+# Generate ConfigMaps with checksum for automatic pod restarts on config change
+generatorOptions:
+  disableNameSuffixHash: false
+  labels:
+    app.kubernetes.io/part-of: streamprocess-pipeline
+
+# Patches for environment-specific customization
+patches:
+  # Increase replicas for production
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 5
+      target:
+        kind: Deployment
+        name: streamprocess-worker
+  # Patch for development (comment out for production)
+  # - patch: |-
+  #     - op: replace
+  #       path: /spec/replicas
+  #       value: 1
+  #   target:
+  #     kind: Deployment
+  #     name: streamprocess-api
+
+# Strategic merge patches
+patchesStrategicMerge:
+  # Add resource overrides per environment
+  # - overlays/production/resources.yaml
+  # - overlays/development/resources.yaml
+
+# JSON 6902 patches for more complex modifications
+patchesJson6902:
+  # Add service monitor annotations
+  - target:
+      kind: Deployment
+      name: streamprocess-api
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/annotations/prometheus.io~1scrape
+        value: "true"
+      - op: add
+        path: /spec/template/metadata/annotations/prometheus.io~1port
+        value: "9090"
+      - op: add
+        path: /spec/template/metadata/annotations/prometheus.io~1path
+        value: "/metrics"

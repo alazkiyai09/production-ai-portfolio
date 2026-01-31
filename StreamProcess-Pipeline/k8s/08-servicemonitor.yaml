@@ -1,0 +1,224 @@
+---
+# ServiceMonitor for Prometheus Operator
+# Enables automatic scraping of metrics by Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: streamprocess-api
+  namespace: streamprocess
+  labels:
+    app: streamprocess-api
+    release: prometheus  # Matches Prometheus Operator release label
+spec:
+  selector:
+    matchLabels:
+      app: streamprocess-api
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s  # Scrape every 15 seconds
+    scrapeTimeout: 10s
+    scheme: http
+  namespaceSelector:
+    matchNames:
+    - streamprocess
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: streamprocess-worker
+  namespace: streamprocess
+  labels:
+    app: streamprocess-worker
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: streamprocess-worker
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s  # Workers can be scraped less frequently
+    scrapeTimeout: 10s
+    scheme: http
+  namespaceSelector:
+    matchNames:
+    - streamprocess
+---
+# PrometheusRule for alerting on StreamProcess metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: streamprocess-alerts
+  namespace: streamprocess
+  labels:
+    release: prometheus
+    app: streamprocess-pipeline
+spec:
+  groups:
+  - name: streamprocess_ingestion
+    interval: 30s
+    rules:
+    # Alert on low ingestion rate
+    - alert: StreamProcessIngestionRateLow
+      expr: rate(streamprocess_ingestion_records_total[5m]) < 10
+      for: 10m
+      labels:
+        severity: warning
+        component: ingestion
+      annotations:
+        summary: "Ingestion rate is below threshold"
+        description: "Ingestion rate is {{ $value }} records/sec (threshold: 10 records/sec) for pod {{ $labels.pod }}"
+
+    # Alert on high ingestion latency
+    - alert: StreamProcessIngestionLatencyHigh
+      expr: histogram_quantile(0.95, rate(streamprocess_ingestion_latency_seconds_bucket[5m])) > 5
+      for: 5m
+      labels:
+        severity: warning
+        component: ingestion
+      annotations:
+        summary: "Ingestion latency is high"
+        description: "P95 ingestion latency is {{ $value }}s (threshold: 5s) for {{ $labels.endpoint }}"
+
+    # Alert on high validation failure rate
+    - alert: StreamProcessValidationFailuresHigh
+      expr: |
+        rate(streamprocess_ingestion_validation_failures_total[5m])
+        /
+        (rate(streamprocess_ingestion_validation_failures_total[5m]) + rate(streamprocess_ingestion_records_total{status="success"}[5m]))
+        > 0.1
+      for: 5m
+      labels:
+        severity: warning
+        component: ingestion
+      annotations:
+        summary: "Validation failure rate is high"
+        description: "Validation failure rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+  - name: streamprocess_processing
+    interval: 30s
+    rules:
+    # Alert on processing queue depth
+    - alert: StreamProcessQueueDepthHigh
+      expr: streamprocess_processing_queue_depth > 10000
+      for: 15m
+      labels:
+        severity: warning
+        component: processing
+      annotations:
+        summary: "Processing queue depth is high"
+        description: "Queue depth for {{ $labels.queue_name }} is {{ $value }} (threshold: 10000)"
+
+    # Alert on processing errors
+    - alert: StreamProcessProcessingErrorsHigh
+      expr: |
+        rate(streamprocess_processing_errors_total[5m])
+        /
+        (rate(streamprocess_processing_records_total[5m]))
+        > 0.05
+      for: 10m
+      labels:
+        severity: critical
+        component: processing
+      annotations:
+        summary: "Processing error rate is high"
+        description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+    # Alert on high processing latency
+    - alert: StreamProcessProcessingLatencyHigh
+      expr: histogram_quantile(0.95, rate(streamprocess_processing_latency_seconds_bucket[5m])) > 60
+      for: 10m
+      labels:
+        severity: warning
+        component: processing
+      annotations:
+        summary: "Processing latency is high"
+        description: "P95 processing latency is {{ $value }}s (threshold: 60s) for {{ $labels.job_type }}"
+
+  - name: streamprocess_embedding
+    interval: 30s
+    rules:
+    # Alert on embedding latency
+    - alert: StreamProcessEmbeddingLatencyHigh
+      expr: histogram_quantile(0.95, rate(streamprocess_embedding_latency_seconds_bucket[5m])) > 2
+      for: 10m
+      labels:
+        severity: warning
+        component: embedding
+      annotations:
+        summary: "Embedding generation latency is high"
+        description: "P95 embedding latency is {{ $value }}s (threshold: 2s) for model {{ $labels.model }}"
+
+    # Alert on low cache hit rate
+    - alert: StreamProcessEmbeddingCacheMissHigh
+      expr: |
+        rate(streamprocess_embedding_cache_misses_total[10m])
+        /
+        (rate(streamprocess_embedding_cache_hits_total[10m]) + rate(streamprocess_embedding_cache_misses_total[10m]))
+        > 0.5
+      for: 15m
+      labels:
+        severity: info
+        component: embedding
+      annotations:
+        summary: "Embedding cache hit rate is low"
+        description: "Cache miss rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+  - name: streamprocess_vector_store
+    interval: 30s
+    rules:
+    # Alert on vector query latency
+    - alert: StreamProcessVectorQueryLatencyHigh
+      expr: histogram_quantile(0.95, rate(streamprocess_vector_store_query_latency_seconds_bucket[5m])) > 1
+      for: 10m
+      labels:
+        severity: warning
+        component: vector_store
+      annotations:
+        summary: "Vector store query latency is high"
+        description: "P95 query latency is {{ $value }}s (threshold: 1s) for {{ $labels.store_type }}"
+
+  - name: streamprocess_system
+    interval: 30s
+    rules:
+    # Alert on high memory usage
+    - alert: StreamProcessMemoryUsageHigh
+      expr: |
+        streamprocess_system_memory_usage_bytes{type="rss"}
+        /
+        kube_pod_container_resource_limits{resource="memory", container="api"}
+        > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        component: system
+      annotations:
+        summary: "Memory usage is high"
+        description: "Memory usage is {{ $value | humanizePercentage }} for {{ $labels.pod }}"
+
+    # Alert on high CPU usage
+    - alert: StreamProcessCPUUsageHigh
+      expr: rate(streamprocess_system_cpu_percent[5m]) > 90
+      for: 10m
+      labels:
+        severity: warning
+        component: system
+      annotations:
+        summary: "CPU usage is high"
+        description: "CPU usage is {{ $value }}% for {{ $labels.pod }}"
+
+  - name: streamprocess_health
+    interval: 15s
+    rules:
+    # Alert on unhealthy components
+    - alert: StreamProcessComponentUnhealthy
+      expr: |
+        streamprocess_component_health_status{status!="healthy"} == 1
+      for: 5m
+      labels:
+        severity: critical
+        component: health
+      annotations:
+        summary: "Component is unhealthy"
+        description: "Component {{ $labels.name }} is {{ $labels.status }}"

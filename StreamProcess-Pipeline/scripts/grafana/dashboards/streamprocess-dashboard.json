@@ -1,0 +1,78 @@
+{
+  "dashboard": {
+    "title": "StreamProcess-Pipeline Dashboard",
+    "tags": ["streamprocess", "pipeline", "llm"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Ingestion Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(streamprocess_ingestion_records_total[5m])",
+            "legendFormat": "{{event_type}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Processing Queue Depth",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "streamprocess_processing_queue_depth",
+            "legendFormat": "{{queue_name}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Embedding Generation Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(streamprocess_embedding_generated_total[5m])",
+            "legendFormat": "{{model}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Vector Store Size",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "streamprocess_vector_store_size",
+            "legendFormat": "{{collection_name}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "API Request Latency (P95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(streamprocess_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{endpoint}}"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(streamprocess_processing_errors_total[5m])",
+            "legendFormat": "{{error_type}}"
+          }
+        ]
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 38,
+    "version": 1
+  }
+}

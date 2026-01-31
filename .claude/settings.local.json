@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(chmod:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip install:*)",
+      "Bash(source:*)",
+      "Bash(sudo apt update:*)",
+      "Bash(sudo apt install:*)",
+      "Bash(python3.11:*)",
+      "Bash(pytest:*)",
+      "Bash(grep:*)",
+      "Bash(export:*)",
+      "Bash(ENVIRONMENT=development python3:*)",
+      "Bash(tail:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(find:*)",
+      "Bash(echo:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(OPENAI_API_KEY=sk-test-key TAVILY_API_KEY=tvly-test-key python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(pip3:*)",
+      "Bash(pip3 list:*)",
+      "Bash(done)"
+    ]
+  }
+}

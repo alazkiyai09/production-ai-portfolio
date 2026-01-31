@@ -1,0 +1,194 @@
+# Multi-stage Dockerfile for Celery Worker
+# StreamProcess-Pipeline Worker
+
+# ============================================================================
+# Stage 1: Builder
+# ============================================================================
+FROM python:3.11-slim as builder
+
+# Set build arguments
+ARG PYTHON_VERSION=3.11
+
+# Set environment variables for build
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies including torch dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    ca-certificates \
+    # Torch dependencies
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Upgrade pip and install dependencies
+# Note: PyTorch installation can be optimized for specific CUDA versions
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install -r requirements.txt
+
+# ============================================================================
+# Stage 2: Runtime
+# ============================================================================
+FROM python:3.11-slim as runtime
+
+# Set runtime arguments
+ARG PYTHON_VERSION=3.11
+ARG APP_USER=appuser
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PYTHONPATH" \
+    PYTHONPATH="/app:$PYTHONPATH" \
+    # Celery settings
+    CELERY_BROKER_URL="redis://redis:6379/1" \
+    CELERY_RESULT_BACKEND="redis://redis:6379/2" \
+    # Embedding cache
+    EMBEDDING_CACHE_DIR="/app/cache/embeddings" \
+    TRANSFORMERS_CACHE="/app/cache/models" \
+    HF_HOME="/app/cache/models" \
+    # User
+    APP_USER=${APP_USER} \
+    APP_UID=${APP_UID} \
+    APP_GID=${APP_GID}
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    postgresql-client \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -g ${APP_GID} ${APP_USER} && \
+    useradd -u ${APP_UID} -g ${APP_GID} -m -s /bin/bash ${APP_USER}
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Create application directory structure
+WORKDIR /app
+RUN mkdir -p /app/data /app/cache/embeddings /app/cache/models /app/logs /app/tmp && \
+    chown -R ${APP_USER}:${APP_USER} /app
+
+# Copy application code
+COPY --chown=${APP_USER}:${APP_USER} src/ /app/src/
+COPY --chown=${APP_USER}:${APP_USER} pyproject.toml .
+
+# Switch to non-root user
+USER ${APP_USER}
+
+# Health check for Celery
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD celery -A src.processing.worker inspect ping || exit 1
+
+# Expose metrics port
+EXPOSE 9090
+
+# Default command - Celery worker with optimized settings
+CMD ["celery", \
+     "-A", "src.processing.worker", \
+     "worker", \
+     "--loglevel=info", \
+     "--concurrency=4", \
+     "--max-tasks-per-child=1000", \
+     "--prefetch-multiplier=4", \
+     "-O", "fair", \
+     "--max-memory-per-child=500000"]
+
+# ============================================================================
+# Stage 3: Development (optional)
+# ============================================================================
+FROM runtime as development
+
+# Install development tools
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    vim \
+    htop \
+    strace \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install development dependencies
+RUN pip install --upgrade pip && \
+    pip install -e ".[dev]"
+
+USER ${APP_USER}
+
+# Development worker with verbose logging
+CMD ["celery", \
+     "-A", "src.processing.worker", \
+     "worker", \
+     "--loglevel=debug", \
+     "--concurrency=2"]
+
+# ============================================================================
+# Stage 4: GPU (for CUDA support)
+# ============================================================================
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 as gpu
+
+# Set user arguments
+ARG APP_USER=appuser
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+# Install Python and runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3-pip \
+    python3-venv \
+    curl \
+    ca-certificates \
+    postgresql-client \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python3.11 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install PyTorch with CUDA support
+RUN pip install --upgrade pip && \
+    pip install torch --index-url https://download.pytorch.org/whl/cu118 && \
+    pip install -r /tmp/requirements.txt
+
+# Create user
+RUN groupadd -g ${APP_GID} ${APP_USER} && \
+    useradd -u ${APP_UID} -g ${APP_GID} -m -s /bin/bash ${APP_USER}
+
+# Copy application
+WORKDIR /app
+RUN mkdir -p /app/cache /app/logs /app/data /app/tmp
+COPY --chown=${APP_USER}:${APP_USER} src/ /app/src/
+COPY --chown=${APP_USER}:${APP_USER} requirements.txt /tmp/
+
+USER ${APP_USER}
+
+# GPU-specific settings
+ENV EMBEDDING_MODEL_DEVICE="cuda" \
+    CUDA_VISIBLE_DEVICES="0"
+
+EXPOSE 9090
+
+CMD ["celery", \
+     "-A", "src.processing.worker", \
+     "worker", \
+     "--loglevel=info", \
+     "--concurrency=2", \
+     "--max-tasks-per-child=500"]

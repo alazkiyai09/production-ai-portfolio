@@ -1,0 +1,202 @@
+# Docker Compose for Testing StreamProcess-Pipeline
+# Isolated test environment with test database and fixtures
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # Test Database
+  # ============================================================================
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: streamprocess-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: streamprocess_test
+      POSTGRES_USER: streamprocess_test_user
+      POSTGRES_PASSWORD: streamprocess_test_pass
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      # Test fixtures
+      - ./tests/fixtures/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamprocess_test_user -d streamprocess_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - streamprocess-test
+
+  # ============================================================================
+  # Test Redis
+  # ============================================================================
+  redis-test:
+    image: redis:7-alpine
+    container_name: streamprocess-redis-test
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - streamprocess-test
+
+  # ============================================================================
+  # Test Runner (Pytest)
+  # ============================================================================
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: development
+    container_name: streamprocess-test-runner
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      # Test configuration
+      ENVIRONMENT: "test"
+      DEBUG: "true"
+      LOG_LEVEL: "WARNING"
+      TESTING: "true"
+
+      # Test database
+      POSTGRES_HOST: "postgres-test"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "streamprocess_test"
+      POSTGRES_USER: "streamprocess_test_user"
+      POSTGRES_PASSWORD: "streamprocess_test_pass"
+      TEST_DATABASE_URL: "postgresql://streamprocess_test_user:streamprocess_test_pass@postgres-test:5432/streamprocess_test"
+
+      # Test Redis
+      REDIS_HOST: "redis-test"
+      REDIS_PORT: "6379"
+      TEST_REDIS_URL: "redis://redis-test:6379/15"
+
+      # Disable external services in tests
+      CHROMA_HOST: ""
+      EMBEDDING_MODEL_DEVICE: "cpu"
+
+      # Pytest settings
+      PYTEST_ARGS: "-v --tb=short --cov=src --cov-report=term-missing --cov-report=html --cov-report=xml"
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+      - ./pytest.ini:/app/pytest.ini:ro
+      - ./tests/fixtures:/app/fixtures:ro
+    command: >
+      bash -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        echo 'Running database migrations...' &&
+        alembic upgrade head &&
+        echo 'Running tests...' &&
+        pytest $$PYTEST_ARGS &&
+        echo 'Tests completed!'
+      "
+    networks:
+      - streamprocess-test
+
+  # ============================================================================
+  # Integration Test Environment
+  # ============================================================================
+  integration-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: development
+    container_name: streamprocess-integration-test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: "test"
+      TESTING: "true"
+      LOG_LEVEL: "INFO"
+
+      # Database
+      POSTGRES_HOST: "postgres-test"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "streamprocess_test"
+      POSTGRES_USER: "streamprocess_test_user"
+      POSTGRES_PASSWORD: "streamprocess_test_pass"
+
+      # Redis
+      REDIS_HOST: "redis-test"
+      REDIS_PORT: "6379"
+      CELERY_BROKER_URL: "redis://redis-test:6379/1"
+      CELERY_RESULT_BACKEND: "redis://redis-test:6379/2"
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    command: pytest tests/integration -v -s
+    networks:
+      - streamprocess-test
+
+  # ============================================================================
+  # Linting and Type Checking
+  # ============================================================================
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: development
+    container_name: streamprocess-lint
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    command: >
+      bash -c "
+        echo 'Running Ruff linter...' &&
+        ruff check src/ tests/ &&
+        echo 'Running Black formatter check...' &&
+        black --check src/ tests/ &&
+        echo 'Running MyPy type checker...' &&
+        mypy src/ &&
+        echo 'All checks passed!'
+      "
+    networks:
+      - streamprocess-test
+
+  # ============================================================================
+  # Coverage Report Server
+  # ============================================================================
+  coverage-report:
+    image: python:3.11-slim
+    container_name: streamprocess-coverage
+    working_dir: /app
+    volumes:
+      - ./htmlcov:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    command: python -m http.server 80
+    networks:
+      - streamprocess-test
+    profiles:
+      - reports
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  streamprocess-test:
+    driver: bridge
+    name: streamprocess-test-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_test_data:
+    name: streamprocess-postgres-test-data

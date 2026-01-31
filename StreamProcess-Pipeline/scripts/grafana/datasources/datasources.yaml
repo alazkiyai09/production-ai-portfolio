@@ -1,0 +1,23 @@
+# Grafana Datasource Provisioning
+# Defines Prometheus and Redis datasources for Grafana
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis:6379
+    jsonData:
+      timeInterval: 15s
+    editable: true

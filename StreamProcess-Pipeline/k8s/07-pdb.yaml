@@ -1,0 +1,62 @@
+---
+# Pod Disruption Budgets for StreamProcess-Pipeline
+# Ensures minimum availability during voluntary disruptions (node maintenance, etc.)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: streamprocess-api-pdb
+  namespace: streamprocess
+spec:
+  # Minimum availability: at least 2 pods must be available
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: streamprocess-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: streamprocess-worker-pdb
+  namespace: streamprocess
+spec:
+  # Minimum 50% of workers must be available
+  minAvailable: 50%
+  selector:
+    matchLabels:
+      app: streamprocess-worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-pdb
+  namespace: streamprocess
+spec:
+  # PostgreSQL must have at least 1 pod available
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: postgres
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: streamprocess
+spec:
+  # Redis should have at least 1 pod
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chroma-pdb
+  namespace: streamprocess
+spec:
+  # ChromaDB should have at least 1 pod
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chroma

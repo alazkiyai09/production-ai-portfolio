@@ -1,0 +1,128 @@
+# ============================================================
+# Enterprise-RAG: Git Ignore Configuration
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv
+.env
+.ENV
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.spyderproject
+.spyproject
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.log
+.cache
+nosetests.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# Data and databases
+data/documents/*
+!data/documents/.gitkeep
+data/chroma/*
+!data/chroma/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Models and cache
+models/
+*.pkl
+*.pickle
+*.bin
+*.safetensors
+.cache/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+
+# Project specific
+uploads/
+temp/
+tmp/
+
+# But keep important files
+!.env.example
+!data/documents/.gitkeep
+!data/chroma/.gitkeep
+!logs/.gitkeep

@@ -1,0 +1,133 @@
+---
+# Ingress for StreamProcess-Pipeline
+# Routes external traffic to API and monitoring services
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: streamprocess-ingress
+  namespace: streamprocess
+  labels:
+    app: streamprocess-pipeline
+  annotations:
+    # Nginx ingress controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Set to "true" in production with TLS
+
+    # CORS headers
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://dashboard.example.com,https://api.example.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,X-API-Key"
+    nginx.ingress.kubernetes.io/cors-max-age: "1728000"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/frame-deny: "true"
+    nginx.ingress.kubernetes.io/content-type-nosniff: "true"
+    nginx.ingress.kubernetes.io/x-content-type-options: "nosniff"
+
+    # Rate limiting (optional, requires nginx ingress rate limiting module)
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+
+    # Proxy settings
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"  # Max upload size
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+
+    # Whitelist source IPs (optional, for security)
+    # nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+    # Basic auth (optional, for Flower monitoring)
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: flower-auth
+    # nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
+
+    # Cert-manager annotations (uncomment for TLS)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # cert-manager.io/issue-temporary-certificate: "true"
+
+spec:
+  ingressClassName: nginx  # Uses nginx ingress controller
+
+  rules:
+  # Main API endpoint
+  - host: api.streamprocess.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: streamprocess-api
+            port:
+              number: 8000
+
+  # Flower monitoring dashboard
+  - host: flower.streamprocess.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: streamprocess-flower
+            port:
+              number: 5555
+
+  # Optional: Metrics endpoint (for Prometheus scraping outside cluster)
+  # - host: metrics.streamprocess.example.com
+  #   http:
+  #     paths:
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: streamprocess-api
+  #           port:
+  #             number: 9090
+
+  # TLS configuration (uncomment for production)
+  # tls:
+  # - hosts:
+  #   - api.streamprocess.example.com
+  #   - flower.streamprocess.example.com
+  #   secretName: streamprocess-tls
+
+---
+# Alternative: LoadBalancer service for direct external access
+# Useful for cloud deployments without ingress controller
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamprocess-api-lb
+  namespace: streamprocess
+  labels:
+    app: streamprocess-api
+  annotations:
+    # AWS LoadBalancer annotations
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+
+    # GCP LoadBalancer annotations
+    # cloud.google.com/load-balancer-type: "Internal"
+
+    # Azure LoadBalancer annotations
+    # service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+spec:
+  type: LoadBalancer
+  # For production, consider using Internal LoadBalancer
+  # type: LoadBalancer
+  # loadBalancerIP: <static-ip>
+  selector:
+    app: streamprocess-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 8000
+    protocol: TCP

@@ -1,0 +1,78 @@
+---
+# ChromaDB Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chroma
+  namespace: streamprocess
+  labels:
+    app: chroma
+    component: vector-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chroma
+  template:
+    metadata:
+      labels:
+        app: chroma
+        component: vector-db
+    spec:
+      containers:
+      - name: chroma
+        image: chromadb/chroma:latest
+        ports:
+        - name: chroma
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: CHROMA_SERVER_AUTH_CREDENTIALS_FILE
+          value: /chroma/auth.txt
+        - name: CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER
+          value: chromadb.auth.token.TokenAuthServerProvider
+        - name: CHROMA_SERVER_AUTH_PROVIDER
+          value: chromadb.auth.token.TokenAuthProvider
+        volumeMounts:
+        - name: chroma-storage
+          mountPath: /chroma/chroma
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/heartbeat
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/v1/heartbeat
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: chroma-storage
+        emptyDir: {}
+---
+# ChromaDB Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: chroma-service
+  namespace: streamprocess
+  labels:
+    app: chroma
+spec:
+  type: ClusterIP
+  ports:
+  - name: chroma
+    port: 8001
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: chroma

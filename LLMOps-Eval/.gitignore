@@ -1,0 +1,94 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data
+data/cache/
+data/models/*.bin
+data/models/*.gguf
+data/models/*.safetensors
+*.db
+*.sqlite
+*.sqlite3
+
+# Results (optional - uncomment if you don't want to track results)
+# data/results/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type Checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Distribution
+*.tar.gz
+*.zip
+
+# Documentation
+docs/_build/
+site/
+
+# Streamlit
+.streamlit/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Prometheus
+prometheus/data/
+
+# Kubernetes Secrets (DO NOT COMMIT)
+k8s/secret.yaml
+k8s/*secret*.yaml
+k8s/secrets/

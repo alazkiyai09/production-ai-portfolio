@@ -1,0 +1,381 @@
+# Docker Compose for StreamProcess-Pipeline
+# Local development stack with all services
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL Database
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: streamprocess-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: streamprocess
+      POSTGRES_USER: streamprocess_user
+      POSTGRES_PASSWORD: streamprocess_pass
+      # Performance tuning
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+      POSTGRES_SHARED_BUFFERS: "256MB"
+      POSTGRES_MAX_CONNECTIONS: "200"
+      POSTGRES_WORK_MEM: "16MB"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Init scripts
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamprocess_user -d streamprocess"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # Redis Cache & Broker
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: streamprocess-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # ChromaDB Vector Database
+  # ============================================================================
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: streamprocess-chroma
+    restart: unless-stopped
+    environment:
+      CHROMA_SERVER_AUTH_CREDENTIALS_FILE: /chroma/auth.txt
+      CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER: chromadb.auth.token.TokenAuthServerProvider
+      CHROMA_SERVER_AUTH_PROVIDER: chromadb.auth.token.TokenAuthProvider
+      # Persistence
+      ANONYMIZED_TELEMETRY: "False"
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # FastAPI Service
+  # ============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: runtime
+    container_name: streamprocess-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+    environment:
+      # Application
+      APP_NAME: "streamprocess-pipeline"
+      ENVIRONMENT: "development"
+      DEBUG: "true"
+      LOG_LEVEL: "INFO"
+
+      # Database
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "streamprocess"
+      POSTGRES_USER: "streamprocess_user"
+      POSTGRES_PASSWORD: "streamprocess_pass"
+      POSTGRES_URL: "postgresql://streamprocess_user:streamprocess_pass@postgres:5432/streamprocess"
+
+      # Redis
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      REDIS_URL: "redis://redis:6379/0"
+
+      # Celery
+      CELERY_BROKER_URL: "redis://redis:6379/1"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/2"
+
+      # ChromaDB
+      CHROMA_HOST: "chroma"
+      CHROMA_PORT: "8000"
+
+      # Embedding
+      EMBEDDING_MODEL_NAME: "sentence-transformers/all-MiniLM-L6-v2"
+      EMBEDDING_MODEL_DEVICE: "cpu"
+      EMBEDDING_BATCH_SIZE: "32"
+      EMBEDDING_CACHE_DIR: "/app/cache/embeddings"
+
+      # Metrics
+      METRICS_ENABLED: "true"
+      METRICS_PORT: "9090"
+
+      # CORS
+      CORS_ORIGINS: '["http://localhost:3000","http://localhost:8000","http://127.0.0.1:3000"]'
+    ports:
+      - "8000:8000"   # API
+      - "9090:9090"   # Metrics
+    volumes:
+      - ./src:/app/src:ro
+      - ./data:/app/data
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+      - ./tmp:/app/tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # Celery Worker
+  # ============================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      target: runtime
+    container_name: streamprocess-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+    environment:
+      # Application
+      APP_NAME: "streamprocess-pipeline"
+      ENVIRONMENT: "development"
+      DEBUG: "true"
+      LOG_LEVEL: "INFO"
+
+      # Database
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "streamprocess"
+      POSTGRES_USER: "streamprocess_user"
+      POSTGRES_PASSWORD: "streamprocess_pass"
+      POSTGRES_URL: "postgresql://streamprocess_user:streamprocess_pass@postgres:5432/streamprocess"
+
+      # Redis/Celery
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      CELERY_BROKER_URL: "redis://redis:6379/1"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/2"
+
+      # ChromaDB
+      CHROMA_HOST: "chroma"
+      CHROMA_PORT: "8000"
+
+      # Embedding
+      EMBEDDING_MODEL_NAME: "sentence-transformers/all-MiniLM-L6-v2"
+      EMBEDDING_MODEL_DEVICE: "cpu"
+      EMBEDDING_BATCH_SIZE: "32"
+      TRANSFORMERS_CACHE: "/app/cache/models"
+      HF_HOME: "/app/cache/models"
+
+      # Processing
+      PROCESSING_WORKERS: "4"
+      PIPELINE_BATCH_SIZE: "100"
+
+      # Metrics
+      METRICS_ENABLED: "true"
+      METRICS_PORT: "9090"
+    volumes:
+      - ./src:/app/src:ro
+      - ./data:/app/data
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+      - ./tmp:/app/tmp
+    healthcheck:
+      test: ["CMD", "celery", "-A", "src.processing.worker", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # Flower (Celery Monitor)
+  # ============================================================================
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      target: runtime
+    container_name: streamprocess-flower
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - worker
+    environment:
+      CELERY_BROKER_URL: "redis://redis:6379/1"
+      FLOWER_PORT: "5555"
+      FLOWER_BASIC_AUTH: "admin:admin123"
+    ports:
+      - "5555:5555"
+    command: >
+      celery -A src.processing.worker flower
+      --port=5555
+      --broker=redis://redis:6379/1
+      --basic_auth=admin:admin123
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # Prometheus (Metrics)
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: streamprocess-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./k8s/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command: ["prometheus", "--config.file=/etc/prometheus/prometheus.yml"]
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # Grafana (Dashboards)
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: streamprocess-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_INSTALL_PLUGINS: "redis-datasource"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "http://localhost:3000"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./scripts/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./scripts/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - streamprocess
+
+  # ============================================================================
+  # Redis Commander (Optional - Redis GUI)
+  # ============================================================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: streamprocess-redis-ui
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: "local:redis:6379"
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - streamprocess
+    profiles:
+      - tools  # Only start with: docker-compose --profile tools up
+
+  # ============================================================================
+  # PgAdmin (Optional - PostgreSQL GUI)
+  # ============================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: streamprocess-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@streamprocess.local"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - streamprocess
+    profiles:
+      - tools
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  streamprocess:
+    driver: bridge
+    name: streamprocess-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_data:
+    name: streamprocess-postgres-data
+  redis_data:
+    name: streamprocess-redis-data
+  chroma_data:
+    name: streamprocess-chroma-data
+  prometheus_data:
+    name: streamprocess-prometheus-data
+  grafana_data:
+    name: streamprocess-grafana-data
+  pgadmin_data:
+    name: streamprocess-pgadmin-data

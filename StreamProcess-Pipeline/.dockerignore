@@ -1,0 +1,94 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+docs/_build/
+*.md
+
+# Tests and development
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+*.log
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
+
+# Data and cache
+data/*
+!data/.gitkeep
+cache/*
+!cache/.gitkeep
+logs/*
+!logs/.gitkeep
+tmp/*
+!tmp/.gitkeep
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Kubernetes (local configs only)
+k8s/overlays/
+
+# Secrets
+.env
+*.pem
+*.key
+*.crt
+secrets/
+
+# Scripts
+scripts/*
+
+# Misc
+*.bak
+*.old
+*.orig
+*.rej
+TODO
+LICENSE
+README*
+
+# Development tools
+.vscode/
+.idea/
+*.sublime-project

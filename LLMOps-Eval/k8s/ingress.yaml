@@ -1,0 +1,157 @@
+# Kubernetes Ingress for LLMOps-Eval
+#
+# Provides external access via:
+# - HTTP (with TLS redirect)
+# - HTTPS (with TLS termination)
+# - Path-based routing
+
+---
+# Ingress for API
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llmops-eval-api-ingress
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: api
+  annotations:
+    # NGINX Ingress annotations
+    kubernetes.io/ingress.class: "nginx"
+    # Cert-manager for automatic TLS
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-API-Key"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    # Proxy settings
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+spec:
+  ingressClassName: nginx
+  # TLS configuration
+  tls:
+  - hosts:
+    - api.llmops-eval.example.com
+    secretName: llmops-eval-api-tls
+  rules:
+  - host: api.llmops-eval.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: llmops-eval-api
+            port:
+              number: 8000
+
+---
+# Ingress for Dashboard
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llmops-eval-dashboard-ingress
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: dashboard
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    # WebSocket support for Streamlit
+    nginx.ingress.kubernetes.io/websocket-services: "llmops-eval-dashboard"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - dashboard.llmops-eval.example.com
+    secretName: llmops-eval-dashboard-tls
+  rules:
+  - host: dashboard.llmops-eval.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: llmops-eval-dashboard
+            port:
+              number: 8501
+
+---
+# Ingress for Prometheus (optional - restrict access)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llmops-eval-prometheus-ingress
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: prometheus
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Basic auth (use with htpasswd secret)
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: prometheus-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Prometheus Authentication"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - prometheus.llmops-eval.example.com
+    secretName: llmops-eval-prometheus-tls
+  rules:
+  - host: prometheus.llmops-eval.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus
+            port:
+              number: 9090
+
+---
+# Ingress for Grafana (optional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: llmops-eval-grafana-ingress
+  namespace: default
+  labels:
+    app: llmops-eval
+    component: grafana
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - grafana.llmops-eval.example.com
+    secretName: llmops-eval-grafana-tls
+  rules:
+  - host: grafana.llmops-eval.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000

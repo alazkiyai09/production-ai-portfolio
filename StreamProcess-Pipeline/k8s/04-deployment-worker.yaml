@@ -1,0 +1,241 @@
+---
+# Worker Deployment for StreamProcess-Pipeline
+# Handles async batch processing, embedding generation, and vector updates
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamprocess-worker
+  namespace: streamprocess
+  labels:
+    app: streamprocess-worker
+    component: worker
+    version: v1
+spec:
+  replicas: 5  # Start with 5 workers for high throughput
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: streamprocess-worker
+  template:
+    metadata:
+      labels:
+        app: streamprocess-worker
+        component: worker
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        checksum/config: "CHANGE_ME"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Init containers to wait for dependencies
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z postgres-service 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z redis-service 6379; do echo waiting for redis; sleep 2; done;']
+      - name: wait-for-chroma
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z chroma-service 8001; do echo waiting for chroma; sleep 2; done;']
+
+      containers:
+      - name: worker
+        image: streamprocess-pipeline:1.0.0
+        imagePullPolicy: IfNotPresent
+
+        # Run Celery worker with optimized settings
+        command: ["celery"]
+        args: [
+          "-A", "src.processing.worker",
+          "worker",
+          "--loglevel=info",
+          "--concurrency=4",
+          "--max-tasks-per-child=1000",
+          "--prefetch-multiplier=4",
+          # Optimization settings
+          "-O", "fair",
+          "--max-memory-per-child=500000",  # 500MB
+          "--time-limit=3600",  # 1 hour max per task
+          "--soft-time-limit=3000",  # 50 min soft limit
+        ]
+
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: streamprocess-secret
+              key: POSTGRES_PASSWORD
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: streamprocess-secret
+              key: SECRET_KEY
+        - name: POSTGRES_URL
+          valueFrom:
+            secretKeyRef:
+              name: streamprocess-secret
+              key: POSTGRES_URL
+        - name: FLOWER_BASIC_AUTH
+          valueFrom:
+            secretKeyRef:
+              name: streamprocess-secret
+              key: FLOWER_BASIC_AUTH
+
+        envFrom:
+        - configMapRef:
+            name: streamprocess-config
+
+        ports:
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+
+        # Workers need more memory for embedding models
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+
+        # Worker-specific probes using Celery ping
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - src.processing.worker
+            - inspect
+            - ping
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - src.processing.worker
+            - inspect
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        startupProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - src.processing.worker
+            - inspect
+            - ping
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 18  # Up to 180 seconds
+
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+        # Mount shared cache for model sharing between workers on same node
+        - name: model-cache
+          mountPath: /app/.cache
+
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      # Use hostPath for model cache (demo only, use PVC in production)
+      - name: model-cache
+        hostPath:
+          path: /var/lib/streamprocess/models
+          type: DirectoryOrCreate
+
+      # Pod anti-affinity to distribute workers
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - streamprocess-worker
+              topologyKey: kubernetes.io/hostname
+
+---
+# Worker HorizontalPodAutoscaler
+# Scales based on queue depth and CPU
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: streamprocess-worker-hpa
+  namespace: streamprocess
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: streamprocess-worker
+  minReplicas: 5
+  maxReplicas: 20
+  metrics:
+  # Scale on CPU
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Scale on memory
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Scale on custom metric: queue depth
+  # Requires Prometheus Adapter with custom metrics
+  # - type: External
+  #   external:
+  #     metric:
+  #       name: streamprocess_processing_queue_depth
+  #     target:
+  #       type: AverageValue
+  #       averageValue: "5000"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 min before scaling down
+      policies:
+      - type: Percent
+        value: 30
+        periodSeconds: 90
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      selectPolicy: Max

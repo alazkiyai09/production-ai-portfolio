@@ -1,0 +1,273 @@
+---
+# Network Policy for StreamProcess-Pipeline
+# Controls pod-to-pod communication for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: streamprocess-network-policy
+  namespace: streamprocess
+  labels:
+    app: streamprocess-pipeline
+spec:
+  podSelector: {}  # Applies to all pods in namespace
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx  # Adjust based on your ingress controller
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 9090
+
+  # Allow internal namespace communication (pods talk to each other)
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8000  # API
+    - protocol: TCP
+      port: 5555  # Flower
+    - protocol: TCP
+      port: 9090  # Metrics
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+    - protocol: TCP
+      port: 8001  # ChromaDB
+    - protocol: TCP
+      port: 6333  # Qdrant
+    - protocol: TCP
+      port: 6334  # Qdrant gRPC
+
+  egress:
+  # Allow to other pods in same namespace
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 5555
+    - protocol: TCP
+      port: 9090
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 8001
+    - protocol: TCP
+      port: 6333
+    - protocol: TCP
+      port: 6334
+
+  # Allow DNS resolution (critical for service discovery)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow external HTTPS for downloading models, etc.
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS
+    - protocol: TCP
+      port: 80   # HTTP (for initial redirects)
+
+  # Allow external API calls (optional)
+  # Uncomment and adjust for specific external services
+  # - to:
+  #   - ipBlock:
+  #       cidr: 10.0.0.0/8  # Private network
+  #   ports:
+  #   - protocol: TCP
+  #     port: 443
+
+---
+# More restrictive network policy for API pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: streamprocess-api-policy
+  namespace: streamprocess
+spec:
+  podSelector:
+    matchLabels:
+      app: streamprocess-api
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Only allow ingress controller and monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+
+  egress:
+  # Only allow database, cache, vector DB
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+
+  - to:
+    - podSelector:
+        matchLabels:
+          app: chroma
+    ports:
+    - protocol: TCP
+      port: 8001
+
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+# Resource Quota for StreamProcess-Pipeline
+# Limits resource consumption in the namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: streamprocess-resource-quota
+  namespace: streamprocess
+spec:
+  hard:
+    # Compute resources
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    limits.cpu: "40"
+    limits.memory: "80Gi"
+
+    # Object counts
+    persistentvolumeclaims: "10"
+    services: "20"
+    secrets: "10"
+    configmaps: "10"
+
+    # Load balancers (expensive, limit tightly)
+    services.loadbalancers: "2"
+
+---
+# Limit Range for StreamProcess-Pipeline
+# Sets default resource limits for pods
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: streamprocess-limit-range
+  namespace: streamprocess
+spec:
+  limits:
+  - default:  # Default limit if not specified
+      cpu: "1000m"
+      memory: "1Gi"
+    defaultRequest:  # Default request if not specified
+      cpu: "100m"
+      memory: "128Mi"
+    max:  # Maximum limit a pod can request
+      cpu: "4000m"
+      memory: "8Gi"
+    min:  # Minimum request a pod must make
+      cpu: "50m"
+      memory: "64Mi"
+    type: Container
+
+  - max:  # Limit for ephemeral storage
+      storage: "5Gi"
+    min:
+      storage: "1Gi"
+    type: PersistentVolumeClaim
+
+---
+# Pod Security Policy (deprecated in Kubernetes 1.25+, use Pod Security Standards instead)
+# This is for older Kubernetes versions
+# apiVersion: policy/v1beta1
+# kind: PodSecurityPolicy
+# metadata:
+#   name: streamprocess-psp
+# spec:
+#   privileged: false
+#   allowPrivilegeEscalation: false
+#   requiredDropCapabilities:
+#   - ALL
+#   volumes:
+#   - 'configMap'
+#   - 'emptyDir'
+#   - 'projected'
+#   - 'secret'
+#   - 'downwardAPI'
+#   # Add 'persistentVolumeClaim' if using PVCs
+#   hostNetwork: false
+#   hostIPC: false
+#   hostPID: false
+#   runAsUser:
+#     rule: 'MustRunAsNonRoot'
+#   seLinux:
+#     rule: 'RunAsAny'
+#   fsGroup:
+#     rule: 'RunAsAny'
+#   supplementalGroups:
+#     rule: 'RunAsAny'
+#   readOnlyRootFilesystem: false
+
+---
+# Pod Security Standard (Kubernetes 1.25+)
+# Replaces PodSecurityPolicy
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: streamprocess
+  labels:
+    # Enforce baseline security policy
+    pod-security.kubernetes.io/enforce: baseline
+    # Warn on restricted policy violations
+    pod-security.kubernetes.io/warn: restricted
+    # Audit restricted policy (log but don't block)
+    pod-security.kubernetes.io/audit: restricted

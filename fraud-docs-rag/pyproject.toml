@@ -1,0 +1,314 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fraud-docs-rag"
+version = "1.0.0"
+description = "Production-grade RAG system for financial fraud detection documents"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+keywords = ["rag", "llamaindex", "fraud-detection", "financial-documents", "chromadb"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Office/Business :: Financial",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    "llama-index-core>=0.10.0",
+    "llama-index-llms-ollama>=0.3.0",
+    "llama-index-llms-openai>=0.2.0",
+    "llama-index-embeddings-huggingface>=0.3.0",
+    "llama-index-vector-stores-chroma>=0.1.0",
+    "llama-index-postprocessor-rerank>=0.2.0",
+    "llama-index-readers-file>=0.1.0",
+    "chromadb>=0.5.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "ollama>=0.4.0",
+    "openai>=1.55.0",
+    "sentence-transformers>=3.3.0",
+    "pypdf>=5.1.0",
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+    "pillow>=11.0.0",
+    "unstructured>=0.15.0",
+    "python-dotenv>=1.0.0",
+    "aiofiles>=24.1.0",
+    "loguru>=0.7.0",
+    "tenacity>=9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "black>=24.10.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+    "types-requests>=2.32.0",
+    "types-aiofiles>=24.1.0",
+]
+monitoring = [
+    "prometheus-client>=0.21.0",
+]
+all = [
+    "fraud-docs-rag[dev,monitoring]",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/fraud-docs-rag"
+Documentation = "https://github.com/yourusername/fraud-docs-rag#readme"
+Repository = "https://github.com/yourusername/fraud-docs-rag"
+Issues = "https://github.com/yourusername/fraud-docs-rag/issues"
+
+[project.scripts]
+fraud-docs-rag = "fraud_docs_rag.main:cli"
+
+# ============================================================================
+# Black Configuration
+# ============================================================================
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312", "py313"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | venv
+)/
+'''
+
+# ============================================================================
+# Ruff Configuration
+# ============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+indent-width = 4
+
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate
+    "RUF",    # Ruff-specific rules
+    "TRY",    # tryceratops
+    "S",      # flake8-bandit (security)
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "DTZ",    # flake8-datetimez
+    "TID",    # flake8-tidy-imports
+    "PLC",    # Pylint conventions
+    "PLE",    # Pylint errors
+    "PLR",    # Pylint refactor
+    "PLW",    # Pylint warnings
+]
+ignore = [
+    "E501",     # line too long (handled by black)
+    "B008",     # do not perform function calls in argument defaults
+    "C901",     # too complex
+    "PLR0913",  # too many arguments
+    "PLR2004",  # magic value comparison
+    "TRY003",   # long exception messages
+    "S101",     # assert used
+    "S104",     # binding to all network interfaces
+    "COM812",   # missing trailing comma
+]
+
+# Allow autofix for all enabled rules (when `--fix` is provided)
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",     # asserts allowed in tests
+    "ARG",      # unused arguments allowed in tests
+    "PLR2004",  # magic values allowed in tests
+]
+"__init__.py" = [
+    "F401",     # unused imports allowed in __init__.py
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["fraud_docs_rag"]
+force-sort-within-sections = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 100
+
+[tool.ruff.lint.pylint]
+max-args = 10
+max-branches = 15
+max-returns = 6
+max-statements = 60
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# ============================================================================
+# Pytest Configuration
+# ============================================================================
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src/fraud_docs_rag",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+    "llm: Tests that call LLMs (may be slow/costly)",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# ============================================================================
+# Coverage Configuration
+# ============================================================================
+[tool.coverage.run]
+source = ["src"]
+branch = true
+parallel = true
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/conftest.py",
+]
+
+[tool.coverage.paths]
+source = [
+    "src/",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# ============================================================================
+# MyPy Configuration
+# ============================================================================
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+show_column_numbers = true
+show_error_context = true
+
+[[tool.mypy.overrides]]
+module = [
+    "llama_index.*",
+    "chromadb.*",
+    "ollama.*",
+    "sentence_transformers.*",
+    "unstructured.*",
+]
+ignore_missing_imports = true
+
+# ============================================================================
+# Pre-commit Configuration (reference)
+# ============================================================================
+# Note: This section is commented out as it's not a standard pyproject.toml section
+# Use .pre-commit-config.yaml instead for pre-commit hooks configuration
+#
+# Example .pre-commit-config.yaml:
+# repos:
+#   - repo: local
+#     hooks:
+#       - id: ruff-check
+#         name: Ruff Check
+#         entry: ruff check --fix
+#         language: system
+#         types: [python]
+#       - id: ruff-format
+#         name: Ruff Format
+#         entry: ruff format
+#         language: system
+#         types: [python]
+#       - id: mypy
+#         name: Mypy
+#         entry: mypy
+#         language: system
+#         types: [python]

@@ -1,0 +1,293 @@
+# Docker Compose for LLMOps-Eval
+#
+# Services:
+#   - eval-api: FastAPI backend (port 8002)
+#   - eval-dashboard: Streamlit dashboard (port 8502)
+#   - prometheus: Metrics collection (port 9090)
+#   - grafana: Visualization (port 3001)
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f eval-api
+#   docker-compose down
+
+version: '3.8'
+
+services:
+  # ============================================================
+  # FastAPI Backend
+  # ============================================================
+  eval-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llmops-eval-api
+    hostname: eval-api
+    ports:
+      - "${API_PORT:-8002}:8000"
+    environment:
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - CORS_ORIGINS=http://localhost:8502,http://localhost:3001
+
+      # API Keys (load from .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - COHERE_API_KEY=${COHERE_API_KEY:-}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY:-}
+
+      # Database
+      - SQLITE_DB_PATH=/app/data/results.db
+
+      # Directories
+      - DATA_DIR=/app/data
+      - DATASETS_DIR=/app/data/datasets
+      - RESULTS_DIR=/app/data/results
+      - CACHE_DIR=/app/data/cache
+
+      # Metrics
+      - ENABLE_METRICS=true
+      - METRICS_PORT=9090
+      - METRICS_ENDPOINT=/metrics
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Evaluation Settings
+      - MAX_CONCURRENT_EVALUATIONS=${MAX_CONCURRENT_EVALUATIONS:-10}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-120}
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+
+      # Cache
+      - ENABLE_CACHE=${ENABLE_CACHE:-true}
+      - CACHE_TTL=${CACHE_TTL:-3600}
+
+    volumes:
+      # Persist data
+      - ./data:/app/data
+      - ./reports:/app/reports
+
+      # Optional: Mount local datasets
+      # - ./my-datasets:/app/data/datasets:ro
+
+    networks:
+      - llmops-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    depends_on:
+      - prometheus
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================================
+  # Streamlit Dashboard
+  # ============================================================
+  eval-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llmops-eval-dashboard
+    hostname: eval-dashboard
+    command: ["streamlit", "run", "src/dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "${DASHBOARD_PORT:-8502}:8501"
+    environment:
+      - API_BASE_URL=http://eval-api:8000
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_LOGGER_LEVEL=info
+
+    networks:
+      - llmops-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    depends_on:
+      eval-api:
+        condition: service_healthy
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================================
+  # Prometheus - Metrics Collection
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: llmops-eval-prometheus
+    hostname: prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      # Configuration
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts:/etc/prometheus/alerts:ro
+
+      # Data persistence
+      - prometheus-data:/prometheus
+
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+
+    networks:
+      - llmops-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ============================================================
+  # Grafana - Visualization (Optional)
+  # ============================================================
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: llmops-eval-grafana
+    hostname: grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3001
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+
+    volumes:
+      # Data persistence
+      - grafana-data:/var/lib/grafana
+
+      # Provisioning
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+
+      # Dashboards
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+    networks:
+      - llmops-network
+
+    restart: unless-stopped
+
+    depends_on:
+      - prometheus
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # ============================================================
+  # Redis - Optional Caching Layer
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: llmops-eval-redis
+    hostname: redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command:
+      - redis-server
+      - --appendonly yes
+      - --maxmemory 256mb
+      - --maxmemory-policy allkeys-lru
+
+    volumes:
+      - redis-data:/data
+
+    networks:
+      - llmops-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+    # Disabled by default - uncomment to enable
+    profiles:
+      - cache
+
+# ============================================================
+# Networks
+# ============================================================
+networks:
+  llmops-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ============================================================
+# Volumes
+# ============================================================
+volumes:
+  prometheus-data:
+    driver: local
+
+  grafana-data:
+    driver: local
+
+  redis-data:
+    driver: local

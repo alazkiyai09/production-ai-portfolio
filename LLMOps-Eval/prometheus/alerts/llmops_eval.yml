@@ -1,0 +1,142 @@
+# Prometheus alert rules for LLMOps-Eval
+
+groups:
+  - name: llmops_eval_alerts
+    interval: 30s
+    rules:
+      # High evaluation failure rate
+      - alert: HighEvaluationFailureRate
+        expr: |
+          rate(evaluations_total{status="failed"}[5m]) / rate(evaluations_total[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: evaluation
+        annotations:
+          summary: "High evaluation failure rate detected"
+          description: "More than 20% of evaluations are failing ({{ $value | humanizePercentage }})"
+
+      # Long running evaluation
+      - alert: LongRunningEvaluation
+        expr: |
+          evaluation_duration_seconds{quantile="0.9"} > 1800
+        for: 10m
+        labels:
+          severity: info
+          component: evaluation
+        annotations:
+          summary: "Long running evaluation detected"
+          description: "90th percentile evaluation duration is {{ $value }}s (> 30 minutes)"
+
+      # High LLM error rate
+      - alert: HighLLMErrorRate
+        expr: |
+          rate(llm_requests_total{status="error"}[5m]) / rate(llm_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: llm
+        annotations:
+          summary: "High LLM error rate detected"
+          description: "More than 10% of LLM requests are failing ({{ $value | humanizePercentage }})"
+
+      # High LLM latency
+      - alert: HighLLMLatency
+        expr: |
+          histogram_quantile(0.95, rate(llm_request_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: llm
+        annotations:
+          summary: "High LLM latency detected"
+          description: "95th percentile LLM request latency is {{ $value }}s (> 30s)"
+
+      # Expensive LLM costs
+      - alert: HighLLMCosts
+        expr: |
+          rate(llm_cost_usd_total[1h]) > 1.0
+        for: 15m
+        labels:
+          severity: warning
+          component: cost
+        annotations:
+          summary: "High LLM API costs detected"
+          description: "LLM costs are exceeding $1/hour (current: ${{ $value }}/hour)"
+
+      # Stuck evaluation
+      - alert: StuckEvaluation
+        expr: |
+          active_evaluations > 0
+        for: 3600
+        labels:
+          severity: critical
+          component: evaluation
+        annotations:
+          summary: "Stuck evaluation detected"
+          description: "{{ $value }} evaluation(s) have been running for over 1 hour"
+
+      # High test failure rate
+      - alert: HighTestFailureRate
+        expr: |
+          rate(test_cases_evaluated_total{status="failed"}[5m]) / rate(test_cases_evaluated_total[5m]) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          component: testing
+        annotations:
+          summary: "High test failure rate detected"
+          description: "More than 30% of test cases are failing ({{ $value | humanizePercentage }})"
+
+  - name: llmops_cost_alerts
+    interval: 60s
+    rules:
+      # Daily cost threshold
+      - alert: DailyCostThreshold
+        expr: |
+          increase(llm_cost_usd_total[24h]) > 50
+        labels:
+          severity: warning
+          component: cost
+        annotations:
+          summary: "Daily cost threshold exceeded"
+          description: "Daily LLM costs have exceeded $50 ({{ $value }})"
+
+      # Provider cost by model
+      - alert: ModelCostSpike
+        expr: |
+          rate(llm_cost_usd_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: info
+          component: cost
+        annotations:
+          summary: "Model cost spike detected"
+          description: "{{ $labels.provider }}:{{ $labels.model }} cost rate is ${{ $value }}/s"
+
+  - name: llmops_system_alerts
+    interval: 30s
+    rules:
+      # System error rate
+      - alert: HighSystemErrorRate
+        expr: |
+          rate(system_errors_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High system error rate detected"
+          description: "System errors are occurring at {{ $value }}/s"
+
+      # Cache miss rate
+      - alert: LowCacheHitRate
+        expr: |
+          rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
+        for: 15m
+        labels:
+          severity: info
+          component: cache
+        annotations:
+          summary: "Low cache hit rate detected"
+          description: "Cache hit rate is below 50% ({{ $value | humanizePercentage }})"

@@ -1,0 +1,95 @@
+---
+# Services for StreamProcess-Pipeline
+# Defines internal service discovery for all components
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: streamprocess
+  labels:
+    app: redis
+    component: cache
+spec:
+  type: ClusterIP
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+    protocol: TCP
+  selector:
+    app: redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: streamprocess
+  labels:
+    app: postgres
+    component: database
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chroma-service
+  namespace: streamprocess
+  labels:
+    app: chroma
+    component: vector-db
+spec:
+  type: ClusterIP
+  ports:
+  - name: chroma
+    port: 8001
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: chroma
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamprocess-flower
+  namespace: streamprocess
+  labels:
+    app: streamprocess-flower
+    component: monitoring
+spec:
+  type: ClusterIP
+  ports:
+  - name: flower
+    port: 5555
+    targetPort: 5555
+    protocol: TCP
+  selector:
+    app: streamprocess-flower
+---
+# Headless service for StatefulSets (PostgreSQL)
+# Enables direct pod-to-pod communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: streamprocess
+  labels:
+    app: postgres
+    component: database
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: postgres

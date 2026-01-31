@@ -1,0 +1,134 @@
+# Docker Compose Development Overrides
+# Extends base docker-compose.yml with development features
+
+version: '3.8'
+
+services:
+  # PostgreSQL with development settings
+  postgres:
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./scripts/sample_data.sql:/docker-entrypoint-initdb.d/02-sample-data.sql
+
+  # ChromaDB with development settings
+  chromadb:
+    ports:
+      - "${CHROMA_PORT:-8001}:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  # FastAPI in development mode
+  datachat-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: datachat-api-dev
+    environment:
+      # Development overrides
+      APP_ENV: development
+      DEBUG: "true"
+      RELOAD: "true"
+
+      # Show queries
+      SHOW_SQL_QUERIES: "true"
+      SHOW_RETRIEVAL_DOCS: "true"
+
+      # CORS (allow all in dev)
+      CORS_ORIGINS: "*"
+
+      # Faster timeouts in dev
+      SQL_TIMEOUT_SECONDS: 30
+      SQL_RETURN_ROWS_LIMIT: 50
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      # Mount source code for hot reload
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - chroma_data:/app/data/chromadb
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+
+  # Streamlit UI in development mode
+  datachat-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: streamlit
+    container_name: datachat-ui-dev
+    environment:
+      - DEV_MODE=true
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    volumes:
+      - ./src/ui:/app/src/ui
+      - ./data:/app/data
+    command: ["streamlit", "run", "src/ui/chat_app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.runOnSave=true", "--logger.level=debug"]
+
+  # Development tools (optional)
+  dev-tools:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: datachat-dev-tools
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    working_dir: /app
+    # Keep container running for commands
+    command: tail -f /dev/null
+    profiles:
+      - tools
+
+  # Database admin tool (pgAdmin)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: datachat-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@datachat.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      - postgres
+    networks:
+      - datachat-network
+    profiles:
+      - tools
+
+  # Redis (optional - for production caching)
+  redis:
+    image: redis:7-alpine
+    container_name: datachat-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - datachat-network
+    profiles:
+      - tools
+
+# Extra volumes for development
+volumes:
+  redis_data:
+    name: datachat-redis-data

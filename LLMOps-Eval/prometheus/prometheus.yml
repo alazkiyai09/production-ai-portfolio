@@ -1,0 +1,48 @@
+# Prometheus configuration for LLMOps-Eval
+#
+# This configuration scrapes metrics from the LLMOps-Eval API and dashboard.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'llmops-eval'
+    environment: 'development'
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Rule files (optional)
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # LLMOps-Eval API metrics
+  - job_name: 'llmops-eval-api'
+    scrape_interval: 30s
+    metrics_path: '/prometheus'
+    static_configs:
+      - targets:
+          - 'host.docker.internal:8000'
+        labels:
+          service: 'llmops-eval-api'
+          component: 'api'
+
+  # Node exporter for system metrics (optional)
+  # - job_name: 'node-exporter'
+  #   static_configs:
+  #     - targets:
+  #         - 'host.docker.internal:9100'
+  #       labels:
+  #         service: 'node-exporter'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+          - 'localhost:9090'
