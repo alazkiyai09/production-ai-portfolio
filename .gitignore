@@ -31,6 +31,12 @@ ENV/
 .env.local
 .env.*.local
 
+# Secrets and keys
+*.pem
+*.key
+secrets/
+*.secrets
+
 # IDE
 .vscode/
 .idea/
