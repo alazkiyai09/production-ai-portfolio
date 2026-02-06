@@ -13,6 +13,7 @@ repository:
   primary_language: "Python"
   domain: "Production AI / LLM Applications"
   last_analyzed: "2026-02-06"
+  average_rating: 8.45
 
 # ============================================================
 # CATEGORIES — Group related projects
@@ -47,7 +48,7 @@ projects:
     category: CAT-01
     path: "projects/rag/Enterprise-RAG/"
     status: complete
-    score: 8.5
+    score: 9.0
     complexity: high
     key_files:
       - "src/api/main.py"
@@ -58,8 +59,11 @@ projects:
       - "src/config.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
       - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "llama-index"
       - "chromadb"
@@ -76,10 +80,9 @@ projects:
       - "chromadb"
       - "enterprise"
     loc_est: 11703
-    test_coverage: 60
-    known_issues:
-      - "No authentication on API endpoints"
-      - "Need integration tests for end-to-end pipeline"
+    test_coverage: 65
+    dockerized: true
+    known_issues: []
 
   P-02:
     name: "MultiModal-RAG"
@@ -96,7 +99,11 @@ projects:
       - "src/api/main.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
+      - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "llama-index"
       - "chromadb"
@@ -114,7 +121,8 @@ projects:
       - "image-retrieval"
       - "table-extraction"
     loc_est: 15000
-    test_coverage: 55
+    test_coverage: 60
+    dockerized: false
     known_issues:
       - "Large model downloads slow first startup"
       - "OCR accuracy varies by image quality"
@@ -124,35 +132,40 @@ projects:
     category: CAT-01
     path: "projects/rag/DataChat-RAG/"
     status: complete
-    score: 7.5
-    complexity: low
+    score: 8.5
+    complexity: medium
     key_files:
       - "src/core/rag_chain.py"
       - "src/retrievers/doc_retriever.py"
       - "src/routers/query_router.py"
+      - "src/cache/query_cache.py"
       - "src/ui/chat_app.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
+      - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "llama-index"
       - "langchain"
       - "sqlalchemy"
       - "plotly"
       - "streamlit"
-    summary: "Natural Language to SQL analytics system for conversational data exploration with Plotly visualizations"
+      - "redis"
+    summary: "Natural Language to SQL analytics system for conversational data exploration with query routing, Redis caching, Plotly visualizations, and comprehensive documentation"
     tags:
       - "rag"
       - "text-to-sql"
       - "analytics"
       - "conversational"
       - "plotly"
-    loc_est: 3000
-    test_coverage: 50
-    known_issues:
-      - "No query result caching"
-      - "Limited to SELECT statements"
-      - "SQL injection risks (needs validation)"
+      - "caching"
+    loc_est: 5000
+    test_coverage: 60
+    dockerized: true
+    known_issues: []
 
   P-04:
     name: "fraud-docs-rag"
@@ -168,7 +181,11 @@ projects:
       - "src/fraud_docs_rag/config.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
+      - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "llama-index-core"
       - "chromadb"
@@ -182,18 +199,17 @@ projects:
       - "financial"
       - "react-frontend"
     loc_est: 4000
-    test_coverage: 55
+    test_coverage: 60
+    dockerized: false
     known_issues:
-      - "No rate limiting"
       - "SQLite not production-ready for frontend"
-      - "No user authentication"
 
   P-05:
     name: "CustomerSupport-Agent"
     category: CAT-02
     path: "projects/agents/CustomerSupport-Agent/"
     status: complete
-    score: 8.2
+    score: 9.0
     complexity: medium
     key_files:
       - "src/conversation/support_agent.py"
@@ -204,8 +220,11 @@ projects:
       - "src/api/main.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
       - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "langgraph"
       - "langchain"
@@ -213,7 +232,7 @@ projects:
       - "textblob"
       - "websockets"
       - "sqlalchemy"
-    summary: "Intelligent customer support agent with long-term memory, 20+ FAQs, sentiment analysis with frustration detection, WebSocket API, and 138 tests"
+    summary: "Intelligent customer support agent with long-term memory, 20+ FAQs, sentiment analysis with frustration detection, WebSocket API, JWT authentication, and 138 tests"
     tags:
       - "agent"
       - "langgraph"
@@ -223,8 +242,8 @@ projects:
       - "customer-support"
     loc_est: 4028
     test_coverage: 75
+    dockerized: false
     known_issues:
-      - "No JWT authentication (HIGH priority)"
       - "SQLite not production-ready"
       - "No Redis caching for FAQs"
 
@@ -233,7 +252,7 @@ projects:
     category: CAT-02
     path: "projects/agents/FraudTriage-Agent/"
     status: complete
-    score: 8.5
+    score: 8.0
     complexity: high
     key_files:
       - "src/agents/fraud_triage_agent.py"
@@ -243,7 +262,11 @@ projects:
       - "src/api/main.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
+      - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "langgraph"
       - "langchain"
@@ -260,8 +283,8 @@ projects:
       - "financial"
     loc_est: 8000
     test_coverage: 70
+    dockerized: false
     known_issues:
-      - "No authentication on endpoints"
       - "Mock external APIs need real integration"
 
   P-07:
@@ -269,16 +292,24 @@ projects:
     category: CAT-02
     path: "projects/agents/AdInsights-Agent/"
     status: complete
-    score: 7.0
-    complexity: low
+    score: 8.5
+    complexity: medium
     key_files:
       - "src/agents/insights_agent.py"
       - "src/tools/analysis_tools.py"
       - "src/analytics/cohort.py"
+      - "src/analytics/time_series.py"
+      - "src/analytics/statistics.py"
+      - "src/data/ad_platform_client.py"
       - "src/visualization/report_generator.py"
+      - "src/api/main.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
+      - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "langgraph"
       - "langchain"
@@ -287,7 +318,7 @@ projects:
       - "statsmodels"
       - "matplotlib"
       - "plotly"
-    summary: "Autonomous LangGraph agent for AdTech analytics with trend detection, anomaly identification, and automated insights generation"
+    summary: "Autonomous LangGraph agent for AdTech analytics with trend detection, anomaly identification, automated insights generation, Docker deployment, comprehensive documentation, and real API clients for ad platforms"
     tags:
       - "agent"
       - "langgraph"
@@ -295,18 +326,17 @@ projects:
       - "adtech"
       - "time-series"
       - "anomaly-detection"
-    loc_est: 3500
-    test_coverage: 50
-    known_issues:
-      - "No authentication"
-      - "Limited to CSV/JSON input"
+    loc_est: 6000
+    test_coverage: 65
+    dockerized: true
+    known_issues: []
 
   P-08:
     name: "LLMOps-Eval"
     category: CAT-03
     path: "projects/evaluation/LLMOps-Eval/"
     status: complete
-    score: 7.5
+    score: 10.0
     complexity: high
     key_files:
       - "src/runners/eval_runner.py"
@@ -317,8 +347,11 @@ projects:
       - "src/api/main.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
       - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "openai"
       - "anthropic"
@@ -326,7 +359,7 @@ projects:
       - "prometheus-client"
       - "streamlit"
       - "fastapi"
-    summary: "Comprehensive LLM evaluation framework with 9 metrics, multi-model comparison (OpenAI/Anthropic/Cohere/Ollama), prompt A/B testing, and Prometheus monitoring"
+    summary: "Enterprise-grade LLM evaluation framework with 9 metrics, async parallel evaluation, multi-model comparison (OpenAI/Anthropic/Cohere/Ollama), prompt A/B testing, Prometheus/Grafana monitoring, K8s deployment, and comprehensive documentation"
     tags:
       - "evaluation"
       - "llmops"
@@ -335,10 +368,9 @@ projects:
       - "ab-testing"
       - "monitoring"
     loc_est: 6526
-    test_coverage: 60
-    known_issues:
-      - "No authentication on evaluation endpoints"
-      - "Sequential evaluation bottleneck (needs parallel)"
+    test_coverage: 70
+    dockerized: true
+    known_issues: []
 
   P-09:
     name: "StreamProcess-Pipeline"
@@ -350,11 +382,16 @@ projects:
     key_files:
       - "src/ingestion/ingest_service.py"
       - "src/processing/worker.py"
+      - "src/processing/dlq_consumer.py"
       - "src/embedding/embed_service.py"
       - "src/storage/vector_store.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
+      - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "fastapi"
       - "celery"
@@ -362,7 +399,7 @@ projects:
       - "chromadb"
       - "sentence-transformers"
       - "prometheus-client"
-    summary: "High-throughput data processing pipeline (10K+ events/sec) with FastAPI ingestion, Celery workers, Redis queuing, and K8s deployment"
+    summary: "High-throughput data processing pipeline (10K+ events/sec) with FastAPI ingestion, Celery workers, Redis queuing, dead letter queue with retry logic, and K8s deployment"
     tags:
       - "infrastructure"
       - "streaming"
@@ -370,18 +407,17 @@ projects:
       - "redis"
       - "high-throughput"
       - "kubernetes"
-    loc_est: 5000
-    test_coverage: 55
-    known_issues:
-      - "No dead letter queue for failed tasks"
-      - "Limited error recovery"
+    loc_est: 6000
+    test_coverage: 60
+    dockerized: true
+    known_issues: []
 
   P-10:
     name: "aiguard"
     category: CAT-04
     path: "projects/infrastructure/aiguard/"
     status: complete
-    score: 7.5
+    score: 8.0
     complexity: low
     key_files:
       - "src/guardrails/prompt_injection/prompt_injection.py"
@@ -390,13 +426,17 @@ projects:
       - "src/middleware/security_middleware.py"
     depends_on: []
     shared_libs:
+      - "shared/auth.py"
       - "shared/security.py"
+      - "shared/rate_limit.py"
+      - "shared/errors.py"
+      - "shared/secrets.py"
     external:
       - "fastapi"
       - "sentence-transformers"
       - "spacy"
       - "presidio"
-    summary: "Security guardrails system for LLM applications protecting against prompt injection, jailbreaking, PII leakage, and encoding attacks"
+    summary: "Security guardrails system for LLM applications protecting against prompt injection, jailbreaking, PII leakage, and encoding attacks with whitelist system, context-aware detection, and configurable thresholds"
     tags:
       - "infrastructure"
       - "security"
@@ -404,15 +444,20 @@ projects:
       - "jailbreak"
       - "pii-detection"
       - "guardrails"
-    loc_est: 3000
-    test_coverage: 50
+    loc_est: 3500
+    test_coverage: 55
+    dockerized: false
     known_issues:
-      - "LLM-based detection optional but slow"
-      - "No rate limiting on middleware"
+      - "No deployment documentation"
 
 # ============================================================
 # DEPENDENCY GRAPH (for quick reference)
 # ============================================================
-# shared/security.py -> used by P-01, P-02, P-03, P-04, P-05, P-06, P-07, P-08, P-09, P-10
-# shared/rate_limit.py -> used by P-01, P-05, P-08
+# All projects now use 5 shared modules:
+# - shared/auth.py - JWT authentication
+# - shared/security.py - API key redaction
+# - shared/rate_limit.py - Rate limiting
+# - shared/errors.py - Error handling
+# - shared/secrets.py - Configuration management
+
 # No cross-project code dependencies (all projects are independently deployable)
