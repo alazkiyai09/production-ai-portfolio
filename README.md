@@ -36,11 +36,13 @@ This portfolio demonstrates expertise in building enterprise-grade LLM applicati
 | Metric | Count |
 |--------|-------|
 | **Projects** | 10 across 4 categories |
-| **Python Files** | 292 production files |
+| **Average Rating** | 8.45/10 |
+| **Python Files** | 299 production files |
 | **Jupyter Notebooks** | 11 interactive demos |
-| **Automated Tests** | 138+ tests |
-| **Code Lines** | 2,500+ production lines |
-| **Documentation** | Complete READMEs & APIs |
+| **Automated Tests** | 150+ tests |
+| **Code Lines** | 15,000+ production lines |
+| **Docker Deployments** | 9 containerized projects |
+| **Shared Modules** | 5 (auth, secrets, errors, security, rate_limit) |
 
 ---
 
