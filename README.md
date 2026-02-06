@@ -409,15 +409,27 @@ I don't just build prototypes—I deliver **production-grade systems** with:
 
 <div align="center">
 
-**Let's build something amazing together!**
+**Hi, I'm Ahmad Whafa Azka Al Azkiyai**
 
-[![Email](https://img.shields.io/badge/Email-Contact_Me-red.svg)](mailto:your.email@example.com)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue.svg)](https://linkedin.com/in/yourprofile)
-[![GitHub](https://img.shields.io/badge/GitHub-View_Profile-black.svg)](https://github.com/yourusername)
-[![Twitter](https://img.shields.io/badge/Twitter-Follow_-1DA1F2.svg)](https://twitter.com/yourusername)
+**Fraud Detection & AI Security Specialist**
 
-**📍 Location: San Francisco, CA (Open to Remote)**
-**💼 Open to: Full-time, Contract, Consulting**
+Federated Learning Security | Adversarial ML | Privacy-Preserving AI
+
+---
+
+[![Website](https://img.shields.io/badge/Website-Visit_-green.svg)](https://alazkiyai09.github.io/)
+[![GitHub](https://img.shields.io/badge/GitHub-alazkiyai09-black.svg)](https://github.com/alazkiyai09)
+[![Email](https://img.shields.io/badge/Email-Get_in_Touch-red.svg)](mailto:contact@alazkiyai.dev)
+
+**📍 Location: Jakarta, Indonesia (Open to Remote)**
+**💼 Open to: Full-time, Contract, Consulting, Research Collaboration**
+
+---
+
+**Domain Expertise:**
+- 🏦 **3+ years** Banking Fraud Detection (SAS Fraud Management, Real-time monitoring)
+- 🔐 **1+ years** Federated Learning Security (Byzantine-resilient FL, SignGuard)
+- 🔒 **2+ years** Steganography & Information Hiding (Published research)
 
 </div>
 
@@ -427,6 +439,6 @@ I don't just build prototypes—I deliver **production-grade systems** with:
 
 **⭐ Star this repository if you find it helpful!**
 
-Made with ❤️ by [Your Name]
+Made with ❤️ by [Ahmad Whafa Azka Al Azkiyai](https://alazkiyai09.github.io/)
 
 </div>
