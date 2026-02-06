@@ -34,7 +34,11 @@
       "Bash(while read:*)",
       "Bash(do basename:*)",
       "Bash(git remote add:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(gh auth status:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(test:*)"
     ]
   }
 }
