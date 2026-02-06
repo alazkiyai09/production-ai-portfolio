@@ -48,7 +48,7 @@ This portfolio demonstrates expertise in building enterprise-grade LLM applicati
 
 ### 🔍 RAG Systems (4 Projects)
 
-#### 1. [Enterprise-RAG](projects/rag/Enterprise-RAG/) ⭐ 8.5/10
+#### 1. [Enterprise-RAG](projects/rag/Enterprise-RAG/) ⭐ 9/10
 **Production-Grade Hybrid RAG System**
 
 - Hybrid retrieval (dense vector + BM25 sparse)
@@ -68,7 +68,7 @@ uvicorn src.api.main:app --reload
 
 ---
 
-#### 2. [MultiModal-RAG](projects/rag/MultiModal-RAG/)
+#### 2. [MultiModal-RAG](projects/rag/MultiModal-RAG/) ⭐ 8/10
 **Image + Text Multi-Modal Retrieval**
 
 - CLIP embeddings for cross-modal search
@@ -81,8 +81,8 @@ uvicorn src.api.main:app --reload
 
 ---
 
-#### 3. [DataChat-RAG](projects/rag/DataChat-RAG/)
-**Natural Language to SQL Analytics**
+#### 3. [DataChat-RAG](projects/rag/DataChat-RAG/) ⭐ 8.5/10
+**Natural Language to SQL Analytics with RAG**
 
 - NL to SQL query generation
 - Conversational data exploration
@@ -94,7 +94,7 @@ uvicorn src.api.main:app --reload
 
 ---
 
-#### 4. [fraud-docs-rag](projects/rag/fraud-docs-rag/)
+#### 4. [fraud-docs-rag](projects/rag/fraud-docs-rag/) ⭐ 8/10
 **Financial Fraud Detection RAG**
 
 - Fraud pattern recognition
@@ -109,7 +109,7 @@ uvicorn src.api.main:app --reload
 
 ### 🤖 LangGraph Agents (3 Projects)
 
-#### 5. [CustomerSupport-Agent](projects/agents/CustomerSupport-Agent/) ⭐ 8.2/10
+#### 5. [CustomerSupport-Agent](projects/agents/CustomerSupport-Agent/) ⭐ 9/10
 **Intelligent Customer Service Chatbot**
 
 - LangGraph state machine orchestration
@@ -130,7 +130,7 @@ uvicorn src.api.main:app --reload
 
 ---
 
-#### 6. [FraudTriage-Agent](projects/agents/FraudTriage-Agent/)
+#### 6. [FraudTriage-Agent](projects/agents/FraudTriage-Agent/) ⭐ 8/10
 **Financial Fraud Analysis Agent**
 
 - LangGraph-based fraud triage
@@ -143,7 +143,7 @@ uvicorn src.api.main:app --reload
 
 ---
 
-#### 7. [AdInsights-Agent](projects/agents/AdInsights-Agent/)
+#### 7. [AdInsights-Agent](projects/agents/AdInsights-Agent/) ⭐ 8.5/10
 **Marketing Analytics Agent**
 
 - Campaign performance analysis
@@ -158,7 +158,7 @@ uvicorn src.api.main:app --reload
 
 ### 📊 LLMOps (1 Project)
 
-#### 8. [LLMOps-Eval](projects/evaluation/LLMOps-Eval/) ⭐ 8.5/10
+#### 8. [LLMOps-Eval](projects/evaluation/LLMOps-Eval/) ⭐ 10/10
 **Comprehensive LLM Evaluation Framework**
 
 - 9 evaluation metrics: Accuracy, Latency, Cost, Hallucination, Toxicity, Format Compliance, Semantic Similarity, Exact Match, Contains
@@ -182,7 +182,7 @@ uvicorn src.api.main:app --reload
 
 ### 🏗️ Infrastructure (2 Projects)
 
-#### 9. [StreamProcess-Pipeline](projects/infrastructure/StreamProcess-Pipeline/)
+#### 9. [StreamProcess-Pipeline](projects/infrastructure/StreamProcess-Pipeline/) ⭐ 8/10
 **High-Throughput Data Processing Pipeline**
 
 - Processes 10,000+ events/second
@@ -202,7 +202,7 @@ docker-compose up -d
 
 ---
 
-#### 10. [aiguard](projects/infrastructure/aiguard/)
+#### 10. [aiguard](projects/infrastructure/aiguard/) ⭐ 8/10
 **AI Safety & Content Moderation**
 
 - Content moderation and toxicity detection
