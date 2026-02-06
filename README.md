@@ -421,7 +421,7 @@ Federated Learning Security | Adversarial ML | Privacy-Preserving AI
 
 [![Website](https://img.shields.io/badge/Website-Visit_-green.svg)](https://alazkiyai09.github.io/)
 [![GitHub](https://img.shields.io/badge/GitHub-alazkiyai09-black.svg)](https://github.com/alazkiyai09)
-[![Email](https://img.shields.io/badge/Email-Get_in_Touch-red.svg)](mailto:contact@alazkiyai.dev)
+[![Email](https://img.shields.io/badge/Email-Get_in_Touch-red.svg)](mailto:azka.alazkiyai@outlook.com)
 
 **📍 Location: Jakarta, Indonesia (Open to Remote)**
 **💼 Open to: Full-time, Contract, Consulting, Research Collaboration**
