@@ -158,7 +158,7 @@ uvicorn src.api.main:app --reload
 
 ### 📊 LLMOps (1 Project)
 
-#### 8. [LLMOps-Eval](projects/evaluation/LLMOps-Eval/) ⭐ 7.5/10
+#### 8. [LLMOps-Eval](projects/evaluation/LLMOps-Eval/) ⭐ 8.5/10
 **Comprehensive LLM Evaluation Framework**
 
 - 9 evaluation metrics: Accuracy, Latency, Cost, Hallucination, Toxicity, Format Compliance, Semantic Similarity, Exact Match, Contains
