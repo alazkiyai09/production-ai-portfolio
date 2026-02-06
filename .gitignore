@@ -73,3 +73,18 @@ Thumbs.db
 # Distribution
 *.tar.gz
 *.zip
+
+# Local documentation (keep in local, not in git)
+PROJECT_CATEGORIES.md
+PROJECT_STRUCTURE.md
+CODE_REVIEW_SUMMARY.md
+TECHNICAL.md
+NOTEBOOKS_CREATED.md
+NOTEBOOKS_FINAL_SUMMARY.md
+CLEANUP_SUMMARY.md
+CRITICAL_FIXES_SUMMARY.md
+CRITICAL_ISSUES_FIX_STATUS.md
+UI_GUIDE.md
+AGENTICFLOW_README.md
+glm-prompts-*.md
+reviews/
