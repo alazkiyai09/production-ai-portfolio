@@ -191,11 +191,28 @@ def task_postrun_handler(sender=None, task_id=None, task=None, retval=None, **kw
 
 
 @task_failure.connect
-def task_failure_handler(sender=None, task_id=None, exception=None, **kwargs):
-    """Handle task failure."""
+def task_failure_handler(sender=None, task_id=None, exception=None, einfo=None, **kwargs):
+    """
+    Handle task failure.
+
+    Sends failed task information to the dead letter queue for later analysis
+    and potential retry processing.
+    """
     task_name = sender.name if sender else "unknown"
     worker_tasks_total.labels(task_name=task_name, status="failed").inc()
     print(f"[{task_name}] Task {task_id} failed: {exception}")
+
+    # Send to dead letter queue
+    try:
+        traceback_str = traceback.format_exception(type(exception), exception, exception.__traceback__) if exception else ""
+        handle_failed_task.delay(
+            task_id=task_id or "unknown",
+            exception=str(exception) if exception else "Unknown error",
+            traceback_str="".join(traceback_str),
+        )
+        print(f"[{task_name}] Task {task_id} sent to dead letter queue")
+    except Exception as dlq_error:
+        print(f"[{task_name}] Failed to send task {task_id} to DLQ: {dlq_error}")
 
 
 # ============================================================================

@@ -20,6 +20,7 @@ from llama_index.llms.openai import OpenAI
 
 from src.routers.query_router import QueryRouter, QueryType, QueryClassification
 from src.retrievers import DocumentRetriever, RetrievalResult
+from src.cache import QueryCache
 
 
 # =============================================================================
@@ -109,6 +110,8 @@ class RAGResponse:
     reasoning: Optional[str] = None
     suggested_followup: List[str] = field(default_factory=list)
     processing_time_seconds: float = 0.0
+    is_cached: bool = False
+    cache_key: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -122,6 +125,8 @@ class RAGResponse:
             "reasoning": self.reasoning,
             "suggested_followup": self.suggested_followup,
             "processing_time_seconds": self.processing_time_seconds,
+            "is_cached": self.is_cached,
+            "cache_key": self.cache_key,
         }
 
 
@@ -180,6 +185,8 @@ Combine quantitative insights with qualitative context for comprehensive answers
         llm: Optional[LLM] = None,
         enable_memory: bool = True,
         max_history_length: int = 10,
+        query_cache: Optional[QueryCache] = None,
+        enable_cache: bool = True,
     ):
         """
         Initialize the RAG chain.
@@ -191,6 +198,8 @@ Combine quantitative insights with qualitative context for comprehensive answers
             llm: LLM instance (defaults to OpenAI gpt-4o)
             enable_memory: Whether to maintain conversation memory
             max_history_length: Maximum number of messages to keep in memory
+            query_cache: Optional QueryCache instance for result caching
+            enable_cache: Whether to enable query result caching (default: True)
         """
         self.sql_retriever = sql_retriever
         self.doc_retriever = doc_retriever
@@ -201,6 +210,23 @@ Combine quantitative insights with qualitative context for comprehensive answers
 
         # Conversation memory
         self.conversation_history: List[Message] = []
+
+        # Query cache
+        self.enable_cache = enable_cache
+        self.query_cache = query_cache
+        if enable_cache and query_cache is None:
+            # Create default cache if none provided
+            try:
+                self.query_cache = QueryCache(
+                    enabled=True,
+                )
+                print("✓ Query cache initialized (default)")
+            except Exception as e:
+                print(f"⚠ Failed to initialize query cache: {e}")
+                self.query_cache = None
+                self.enable_cache = False
+        elif query_cache:
+            print("✓ Query cache initialized")
 
         print("✓ DataChatRAG initialized")
 
@@ -223,6 +249,46 @@ Combine quantitative insights with qualitative context for comprehensive answers
         """
         import time
         start_time = time.time()
+
+        # Prepare conversation context for cache key
+        conversation_context = None
+        if self.enable_memory and self.conversation_history:
+            conversation_context = [
+                {"role": msg.role, "content": msg.content}
+                for msg in self.conversation_history[-4:]  # Last 4 messages for context
+            ]
+
+        # Check cache first
+        if self.enable_cache and self.query_cache:
+            try:
+                cached = self.query_cache.get(
+                    question=question,
+                    filters=filters,
+                    conversation_context=conversation_context,
+                )
+                if cached:
+                    # Reconstruct RAGResponse from cache
+                    response = RAGResponse(
+                        answer=cached.get("answer", ""),
+                        query_type=cached.get("query_type", ""),
+                        confidence=cached.get("confidence", 0.0),
+                        sql_query=cached.get("sql_query"),
+                        sql_results=None,  # SQL results not cached
+                        doc_sources=cached.get("doc_sources", []),
+                        reasoning=cached.get("reasoning"),
+                        suggested_followup=cached.get("suggested_followup", []),
+                        processing_time_seconds=time.time() - start_time,
+                        is_cached=True,
+                        cache_key=cached.get("_cache_key"),
+                    )
+                    # Update conversation memory even for cached responses
+                    if self.enable_memory:
+                        self._update_memory(question, response)
+                    return response
+            except Exception as e:
+                # Log cache error but continue processing
+                import logging
+                logging.getLogger(__name__).warning(f"Cache retrieval error: {e}")
 
         # Classify the query
         classification = self.query_router.classify(question)
@@ -250,6 +316,33 @@ Combine quantitative insights with qualitative context for comprehensive answers
         # Add metadata
         response.reasoning = classification.reasoning
         response.processing_time_seconds = time.time() - start_time
+        response.is_cached = False
+
+        # Generate cache key
+        cache_key = None
+        if self.enable_cache and self.query_cache:
+            try:
+                cache_key = self.query_cache.generate_key(
+                    question=question,
+                    filters=filters,
+                    conversation_context=conversation_context,
+                )
+                response.cache_key = cache_key
+
+                # Store in cache
+                cache_data = response.to_dict()
+                cache_data["_cache_key"] = cache_key
+
+                self.query_cache.set(
+                    question=question,
+                    response=cache_data,
+                    filters=filters,
+                    conversation_context=conversation_context,
+                )
+            except Exception as e:
+                # Log cache error but don't fail the request
+                import logging
+                logging.getLogger(__name__).warning(f"Cache storage error: {e}")
 
         # Update conversation memory
         if self.enable_memory:
@@ -673,6 +766,108 @@ If the information doesn't fully answer the question, acknowledge this."""
             for msg in self.conversation_history
         ]
 
+    # =========================================================================
+    # Cache Management
+    # =========================================================================
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics.
+
+        Returns:
+            Dict with cache statistics including hit rate, miss rate, etc.
+        """
+        if not self.enable_cache or not self.query_cache:
+            return {
+                "cache_enabled": False,
+                "message": "Caching is not enabled",
+            }
+
+        try:
+            stats = self.query_cache.get_stats()
+            stats["cache_enabled"] = True
+            return stats
+        except Exception as e:
+            return {
+                "cache_enabled": True,
+                "error": str(e),
+                "message": "Failed to retrieve cache statistics",
+            }
+
+    def clear_cache(self) -> Dict[str, Any]:
+        """
+        Clear the query cache.
+
+        Returns:
+            Dict with operation result
+        """
+        if not self.enable_cache or not self.query_cache:
+            return {
+                "success": False,
+                "message": "Caching is not enabled",
+            }
+
+        try:
+            cleared = self.query_cache.clear()
+            return {
+                "success": cleared,
+                "message": "Cache cleared successfully" if cleared else "No cache entries to clear",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to clear cache: {e}",
+            }
+
+    def delete_cached_query(
+        self,
+        question: str,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Delete a specific query from cache.
+
+        Args:
+            question: The question to delete from cache
+            filters: Optional filters used with the question
+
+        Returns:
+            Dict with operation result
+        """
+        if not self.enable_cache or not self.query_cache:
+            return {
+                "success": False,
+                "message": "Caching is not enabled",
+            }
+
+        try:
+            # Get conversation context for cache key
+            conversation_context = None
+            if self.enable_memory and self.conversation_history:
+                conversation_context = [
+                    {"role": msg.role, "content": msg.content}
+                    for msg in self.conversation_history[-4:]
+                ]
+
+            deleted = self.query_cache.delete(
+                question=question,
+                filters=filters,
+                conversation_context=conversation_context,
+            )
+            return {
+                "success": deleted,
+                "message": "Query deleted from cache" if deleted else "Query not found in cache",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to delete from cache: {e}",
+            }
+
+    def is_cache_enabled(self) -> bool:
+        """Check if query caching is enabled."""
+        return self.enable_cache and self.query_cache is not None
+
 
 # =============================================================================
 # Convenience Functions
@@ -683,6 +878,8 @@ def create_rag_chain(
     doc_retriever: DocumentRetriever,
     query_router: QueryRouter,
     llm: Optional[LLM] = None,
+    query_cache: Optional[QueryCache] = None,
+    enable_cache: bool = True,
 ) -> DataChatRAG:
     """
     Convenience function to create a RAG chain.
@@ -692,6 +889,8 @@ def create_rag_chain(
         doc_retriever: Document retriever instance
         query_router: Query router instance
         llm: Optional LLM instance
+        query_cache: Optional QueryCache instance for result caching
+        enable_cache: Whether to enable query result caching
 
     Returns:
         Configured DataChatRAG instance
@@ -701,6 +900,8 @@ def create_rag_chain(
         doc_retriever=doc_retriever,
         query_router=query_router,
         llm=llm,
+        query_cache=query_cache,
+        enable_cache=enable_cache,
     )
 
 
@@ -708,13 +909,28 @@ def create_rag_chain(
 # Test Cases
 # =============================================================================
 
+# Whitelist of allowed table names for safe SQL query construction
+ALLOWED_TABLES = {
+    "campaigns", "impressions", "clicks", "conversions", "daily_metrics"
+}
+
+
 class MockSQLRetriever:
     """Mock SQL retriever for testing."""
 
     def query(self, question: str, tables: List[str] = None) -> SQLResult:
-        """Generate mock SQL result."""
+        """Generate mock SQL result.
+
+        Note: This is a mock for testing only. In production, use parameterized queries.
+        """
+        # Safely select the table name from the whitelist
+        if tables and tables[0] in ALLOWED_TABLES:
+            table_name = tables[0]
+        else:
+            table_name = "campaigns"  # Default safe table
+
         return SQLResult(
-            query=f"SELECT * FROM {tables[0] if tables else 'campaigns'} LIMIT 5",
+            query=f"SELECT * FROM {table_name} LIMIT 5",
             results=[
                 {"campaign_name": "MedTech Q4", "ctr": 1.2, "impressions": 50000, "clicks": 600},
                 {"campaign_name": "PharmaCorp Launch", "ctr": 0.8, "impressions": 75000, "clicks": 600},

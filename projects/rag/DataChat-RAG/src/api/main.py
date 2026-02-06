@@ -5,6 +5,7 @@ REST API for the healthcare AdTech RAG system.
 """
 
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -22,11 +23,41 @@ from fastapi import (
     Form,
     BackgroundTasks,
     status,
+    Request,
+    Depends,
+    Body,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 import uvicorn
+
+# Shared modules
+from shared.security import SensitiveDataFilter, install_security_filter
+from shared.rate_limit import limiter, rate_limit_exception_handler, RateLimitExceeded
+from shared.auth import (
+    get_current_user,
+    require_role,
+    require_admin,
+    create_access_token,
+    create_refresh_token,
+    verify_token,
+    User,
+    UserCreate,
+    Token,
+    TokenData,
+    Role,
+    InMemoryUserStore,
+)
+from shared.errors import (
+    register_error_handlers,
+    AuthenticationError,
+    AuthorizationError,
+    ValidationError,
+    DatabaseError,
+    ExternalAPIError,
+)
+from shared.secrets import get_settings
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -34,6 +65,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from src.core.rag_chain import DataChatRAG, RAGResponse, Message
 from src.routers.query_router import QueryRouter, QueryType
 from src.retrievers import DocumentRetriever
+from src.cache import QueryCache
 
 # =============================================================================
 # Logging Configuration
@@ -94,6 +126,8 @@ class ChatResponse(BaseModel):
     doc_sources: List[DocumentSource] = Field(default_factory=list, description="Document citations")
     suggested_followup: List[str] = Field(default_factory=list, description="Suggested follow-up questions")
     processing_time_seconds: float = Field(..., description="Time to process request")
+    is_cached: bool = Field(False, description="Whether the response was served from cache")
+    cache_key: Optional[str] = Field(None, description="Cache key if response was cached")
 
     model_config = {
         "json_schema_extra": {
@@ -183,6 +217,27 @@ class SchemaResponse(BaseModel):
 
     tables: List[SchemaTable] = Field(default_factory=list, description="Available tables")
     relationships: List[Dict[str, str]] = Field(default_factory=list, description="Table relationships")
+
+
+class CacheStatsResponse(BaseModel):
+    """Cache statistics response."""
+
+    cache_enabled: bool = Field(..., description="Whether caching is enabled")
+    total_hits: Optional[int] = Field(None, description="Total cache hits")
+    total_misses: Optional[int] = Field(None, description="Total cache misses")
+    total_requests: Optional[int] = Field(None, description="Total cache requests")
+    hit_rate: Optional[float] = Field(None, description="Cache hit rate percentage")
+    miss_rate: Optional[float] = Field(None, description="Cache miss rate percentage")
+    last_hit_at: Optional[str] = Field(None, description="Last cache hit timestamp")
+    last_miss_at: Optional[str] = Field(None, description="Last cache miss timestamp")
+    error: Optional[str] = Field(None, description="Error message if applicable")
+
+
+class CacheClearResponse(BaseModel):
+    """Cache clear response."""
+
+    success: bool = Field(..., description="Whether the operation succeeded")
+    message: str = Field(..., description="Operation message")
 
 
 # =============================================================================
@@ -313,12 +368,46 @@ async def lifespan(app: FastAPI):
         sql_retriever = None
         logger.info("⚠ SQL retriever not yet implemented")
 
+        # Initialize query cache if enabled
+        query_cache = None
+        enable_cache = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+        if enable_cache:
+            try:
+                redis_url = os.getenv("REDIS_URL")
+                redis_host = os.getenv("REDIS_HOST", "localhost")
+                redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                redis_db = int(os.getenv("REDIS_DB", "0"))
+                redis_password = os.getenv("REDIS_PASSWORD")
+                cache_ttl = int(os.getenv("CACHE_TTL", "3600"))
+
+                if redis_url:
+                    query_cache = QueryCache(
+                        redis_url=redis_url,
+                        default_ttl=cache_ttl,
+                        enabled=True,
+                    )
+                else:
+                    query_cache = QueryCache(
+                        redis_host=redis_host,
+                        redis_port=redis_port,
+                        redis_db=redis_db,
+                        redis_password=redis_password,
+                        default_ttl=cache_ttl,
+                        enabled=True,
+                    )
+                logger.info("✓ Query cache initialized")
+            except Exception as e:
+                logger.warning(f"⚠ Failed to initialize query cache: {e}")
+                logger.info("  Continuing without cache (API will function normally)")
+
         # Create RAG chain
         rag_chain = DataChatRAG(
             sql_retriever=sql_retriever,
             doc_retriever=doc_retriever,
             query_router=query_router,
             enable_memory=True,
+            query_cache=query_cache,
+            enable_cache=enable_cache,
         )
 
         logger.info("✓ RAG chain initialized")
@@ -332,6 +421,9 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down DataChat-RAG API")
+    # Close cache connection if exists
+    if rag_chain and rag_chain.query_cache:
+        rag_chain.query_cache.close()
 
 
 # =============================================================================
@@ -349,6 +441,7 @@ app = FastAPI(
     - Semantic document retrieval
     - Conversation memory
     - Streaming responses
+    - Query result caching with Redis
     """,
     version=API_VERSION,
     lifespan=lifespan,
@@ -362,6 +455,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Install security filter for logs
+install_security_filter()
+
+# Register error handlers
+register_error_handlers(app)
+
+# Register rate limit exception handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
+
+# Get settings
+settings = get_settings()
 
 
 # =============================================================================
@@ -403,6 +508,98 @@ async def general_exception_handler(request, exc):
 # Endpoints
 # =============================================================================
 
+# In-memory user store for demo (replace with database in production)
+user_store = InMemoryUserStore()
+
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+@app.post("/auth/register", tags=["Authentication"])
+@limiter.limit("10/hour")
+async def register(
+    user_data: UserCreate,
+    request: Request,
+):
+    """Register a new user."""
+    try:
+        user = await user_store.create_user(user_data)
+        return {
+            "message": "User registered successfully",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role.value,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@app.post("/auth/login", tags=["Authentication"])
+@limiter.limit("20/minute")
+async def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    request: Request = None,
+):
+    """Login and receive access token."""
+    from shared.auth import authenticate_user, login_user
+
+    user = await authenticate_user(username, password, user_store)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_data = await login_user(username, password, user_store)
+    return token_data
+
+
+@app.post("/auth/refresh", tags=["Authentication"])
+@limiter.limit("30/minute")
+async def refresh(
+    refresh_token: str = Form(...),
+    request: Request = None,
+):
+    """Refresh access token."""
+    from shared.auth import refresh_user_token
+
+    token_data = await refresh_user_token(refresh_token, user_store)
+    if not token_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token_data
+
+
+@app.get("/auth/me", tags=["Authentication"])
+@limiter.limit("60/minute")
+async def get_current_user_info(current_user: TokenData = Depends(get_current_user)):
+    """Get current user information."""
+    user = await user_store.get_user_by_id(current_user.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role.value,
+        "is_active": user.is_active,
+    }
+
+
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with API information."""
@@ -418,12 +615,15 @@ async def root():
             "documents": "/documents/ingest",
             "health": "/health",
             "schema": "/schema",
+            "cache_stats": "/cache/stats",
+            "cache_clear": "/cache/clear",
         },
     }
 
 
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
-async def chat(request: ChatRequest) -> ChatResponse:
+@limiter.limit("30/minute")
+async def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     """
     Main chat endpoint for asking questions.
 
@@ -472,6 +672,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             ],
             suggested_followup=response.suggested_followup,
             processing_time_seconds=response.processing_time_seconds,
+            is_cached=response.is_cached,
+            cache_key=response.cache_key,
         )
 
     except HTTPException:
@@ -890,6 +1092,56 @@ async def get_schema():
     return SchemaResponse(
         tables=tables,
         relationships=relationships,
+    )
+
+
+@app.get("/cache/stats", response_model=CacheStatsResponse, tags=["Cache"])
+async def get_cache_stats():
+    """
+    Get cache statistics.
+
+    Returns cache performance metrics including hit rate, miss rate, and total requests.
+    """
+    if rag_chain is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG chain not initialized. Check server logs."
+        )
+
+    stats = rag_chain.get_cache_stats()
+
+    return CacheStatsResponse(
+        cache_enabled=stats.get("cache_enabled", False),
+        total_hits=stats.get("total_hits"),
+        total_misses=stats.get("total_misses"),
+        total_requests=stats.get("total_requests"),
+        hit_rate=stats.get("hit_rate"),
+        miss_rate=stats.get("miss_rate"),
+        last_hit_at=stats.get("last_hit_at"),
+        last_miss_at=stats.get("last_miss_at"),
+        error=stats.get("error"),
+    )
+
+
+@app.delete("/cache/clear", response_model=CacheClearResponse, tags=["Cache"])
+async def clear_cache():
+    """
+    Clear the query cache.
+
+    Removes all cached query results. Use with caution as this will impact performance
+    until the cache is repopulated.
+    """
+    if rag_chain is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG chain not initialized. Check server logs."
+        )
+
+    result = rag_chain.clear_cache()
+
+    return CacheClearResponse(
+        success=result.get("success", False),
+        message=result.get("message", "Unknown result"),
     )
 
 

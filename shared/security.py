@@ -14,6 +14,7 @@ Example:
     "Failed with api_key=REDACTED for user@domain.com"
 """
 
+import logging
 import re
 from typing import Any
 

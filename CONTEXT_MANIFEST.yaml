@@ -1,0 +1,418 @@
+# ============================================================
+# CONTEXT_MANIFEST.yaml
+# ============================================================
+# Machine-readable project registry for the Context Manager.
+# This file enables selective loading of project context based on
+# categories, tags, and dependencies.
+# ============================================================
+
+repository:
+  name: "AIEngineerProject"
+  url: "https://github.com/alazkiyai09/production-ai-portfolio"
+  total_projects: 10
+  primary_language: "Python"
+  domain: "Production AI / LLM Applications"
+  last_analyzed: "2026-02-06"
+
+# ============================================================
+# CATEGORIES — Group related projects
+# ============================================================
+categories:
+  CAT-01:
+    name: "RAG Systems"
+    description: "Retrieval-Augmented Generation systems with hybrid search, multi-modal capabilities, and domain-specific applications"
+    projects: [P-01, P-02, P-03, P-04]
+
+  CAT-02:
+    name: "LangGraph Agents"
+    description: "LangGraph-based AI agents with memory, tools, and state machine orchestration"
+    projects: [P-05, P-06, P-07]
+
+  CAT-03:
+    name: "LLMOps / Evaluation"
+    description: "LLM evaluation and testing frameworks with multi-model comparison and monitoring"
+    projects: [P-08]
+
+  CAT-04:
+    name: "Infrastructure"
+    description: "Supporting infrastructure including streaming pipelines and AI security guardrails"
+    projects: [P-09, P-10]
+
+# ============================================================
+# PROJECT REGISTRY — One entry per project
+# ============================================================
+projects:
+  P-01:
+    name: "Enterprise-RAG"
+    category: CAT-01
+    path: "projects/rag/Enterprise-RAG/"
+    status: complete
+    score: 8.5
+    complexity: high
+    key_files:
+      - "src/api/main.py"
+      - "src/retrieval/hybrid_retriever.py"
+      - "src/retrieval/embedding_service.py"
+      - "src/retrieval/vector_store.py"
+      - "src/generation/rag_chain.py"
+      - "src/config.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+      - "shared/rate_limit.py"
+    external:
+      - "llama-index"
+      - "chromadb"
+      - "qdrant-client"
+      - "sentence-transformers"
+      - "fastapi"
+      - "ragas"
+    summary: "Production-grade hybrid RAG system with dense+sparse retrieval, cross-encoder reranking, multi-format ingestion, and RAGAS evaluation"
+    tags:
+      - "rag"
+      - "hybrid-retrieval"
+      - "reranking"
+      - "fastapi"
+      - "chromadb"
+      - "enterprise"
+    loc_est: 11703
+    test_coverage: 60
+    known_issues:
+      - "No authentication on API endpoints"
+      - "Need integration tests for end-to-end pipeline"
+
+  P-02:
+    name: "MultiModal-RAG"
+    category: CAT-01
+    path: "projects/rag/MultiModal-RAG/"
+    status: complete
+    score: 8.0
+    complexity: high
+    key_files:
+      - "src/multimodal/multimodal_retriever.py"
+      - "src/multimodal/image_processor.py"
+      - "src/multimodal/vision_llm.py"
+      - "src/extraction/ocr_processor.py"
+      - "src/api/main.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+    external:
+      - "llama-index"
+      - "chromadb"
+      - "clip"
+      - "unstructured"
+      - "pytesseract"
+      - "paddleocr"
+      - "camelot-py"
+    summary: "Multi-modal RAG system with CLIP embeddings for image+text retrieval, OCR with multiple engines, BLIP captioning, and table extraction"
+    tags:
+      - "rag"
+      - "multi-modal"
+      - "vision"
+      - "ocr"
+      - "image-retrieval"
+      - "table-extraction"
+    loc_est: 15000
+    test_coverage: 55
+    known_issues:
+      - "Large model downloads slow first startup"
+      - "OCR accuracy varies by image quality"
+
+  P-03:
+    name: "DataChat-RAG"
+    category: CAT-01
+    path: "projects/rag/DataChat-RAG/"
+    status: complete
+    score: 7.5
+    complexity: low
+    key_files:
+      - "src/core/rag_chain.py"
+      - "src/retrievers/doc_retriever.py"
+      - "src/routers/query_router.py"
+      - "src/ui/chat_app.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+    external:
+      - "llama-index"
+      - "langchain"
+      - "sqlalchemy"
+      - "plotly"
+      - "streamlit"
+    summary: "Natural Language to SQL analytics system for conversational data exploration with Plotly visualizations"
+    tags:
+      - "rag"
+      - "text-to-sql"
+      - "analytics"
+      - "conversational"
+      - "plotly"
+    loc_est: 3000
+    test_coverage: 50
+    known_issues:
+      - "No query result caching"
+      - "Limited to SELECT statements"
+      - "SQL injection risks (needs validation)"
+
+  P-04:
+    name: "fraud-docs-rag"
+    category: CAT-01
+    path: "projects/rag/fraud-docs-rag/"
+    status: complete
+    score: 8.0
+    complexity: low
+    key_files:
+      - "src/fraud_docs_rag/api/main.py"
+      - "src/fraud_docs_rag/generation/rag_chain.py"
+      - "src/fraud_docs_rag/retrieval/hybrid_retriever.py"
+      - "src/fraud_docs_rag/config.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+    external:
+      - "llama-index-core"
+      - "chromadb"
+      - "fastapi"
+      - "sentence-transformers"
+    summary: "RAG system for financial fraud detection and compliance documents with auto-categorization (AML/KYC/Fraud) and React frontend"
+    tags:
+      - "rag"
+      - "fraud-detection"
+      - "compliance"
+      - "financial"
+      - "react-frontend"
+    loc_est: 4000
+    test_coverage: 55
+    known_issues:
+      - "No rate limiting"
+      - "SQLite not production-ready for frontend"
+      - "No user authentication"
+
+  P-05:
+    name: "CustomerSupport-Agent"
+    category: CAT-02
+    path: "projects/agents/CustomerSupport-Agent/"
+    status: complete
+    score: 8.2
+    complexity: medium
+    key_files:
+      - "src/conversation/support_agent.py"
+      - "src/knowledge/faq_store.py"
+      - "src/memory/conversation_memory.py"
+      - "src/sentiment/analyzer.py"
+      - "src/tools/support_tools.py"
+      - "src/api/main.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+      - "shared/rate_limit.py"
+    external:
+      - "langgraph"
+      - "langchain"
+      - "chromadb"
+      - "textblob"
+      - "websockets"
+      - "sqlalchemy"
+    summary: "Intelligent customer support agent with long-term memory, 20+ FAQs, sentiment analysis with frustration detection, WebSocket API, and 138 tests"
+    tags:
+      - "agent"
+      - "langgraph"
+      - "memory"
+      - "sentiment-analysis"
+      - "websocket"
+      - "customer-support"
+    loc_est: 4028
+    test_coverage: 75
+    known_issues:
+      - "No JWT authentication (HIGH priority)"
+      - "SQLite not production-ready"
+      - "No Redis caching for FAQs"
+
+  P-06:
+    name: "FraudTriage-Agent"
+    category: CAT-02
+    path: "projects/agents/FraudTriage-Agent/"
+    status: complete
+    score: 8.5
+    complexity: high
+    key_files:
+      - "src/agents/fraud_triage_agent.py"
+      - "src/agents/graph.py"
+      - "src/agents/state.py"
+      - "src/tools/fraud_tools.py"
+      - "src/api/main.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+    external:
+      - "langgraph"
+      - "langchain"
+      - "zhipuai"
+      - "fastapi"
+      - "langsmith"
+    summary: "LangGraph-based fraud alert triage agent that parses alerts, gathers context, assesses risk with GLM-4.7, and routes based on risk scores"
+    tags:
+      - "agent"
+      - "langgraph"
+      - "fraud-detection"
+      - "triage"
+      - "risk-assessment"
+      - "financial"
+    loc_est: 8000
+    test_coverage: 70
+    known_issues:
+      - "No authentication on endpoints"
+      - "Mock external APIs need real integration"
+
+  P-07:
+    name: "AdInsights-Agent"
+    category: CAT-02
+    path: "projects/agents/AdInsights-Agent/"
+    status: complete
+    score: 7.0
+    complexity: low
+    key_files:
+      - "src/agents/insights_agent.py"
+      - "src/tools/analysis_tools.py"
+      - "src/analytics/cohort.py"
+      - "src/visualization/report_generator.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+    external:
+      - "langgraph"
+      - "langchain"
+      - "pandas"
+      - "scipy"
+      - "statsmodels"
+      - "matplotlib"
+      - "plotly"
+    summary: "Autonomous LangGraph agent for AdTech analytics with trend detection, anomaly identification, and automated insights generation"
+    tags:
+      - "agent"
+      - "langgraph"
+      - "analytics"
+      - "adtech"
+      - "time-series"
+      - "anomaly-detection"
+    loc_est: 3500
+    test_coverage: 50
+    known_issues:
+      - "No authentication"
+      - "Limited to CSV/JSON input"
+
+  P-08:
+    name: "LLMOps-Eval"
+    category: CAT-03
+    path: "projects/evaluation/LLMOps-Eval/"
+    status: complete
+    score: 7.5
+    complexity: high
+    key_files:
+      - "src/runners/eval_runner.py"
+      - "src/evaluation/metrics.py"
+      - "src/models/llm_providers.py"
+      - "src/datasets/dataset_manager.py"
+      - "src/dashboard/app.py"
+      - "src/api/main.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+      - "shared/rate_limit.py"
+    external:
+      - "openai"
+      - "anthropic"
+      - "sentence-transformers"
+      - "prometheus-client"
+      - "streamlit"
+      - "fastapi"
+    summary: "Comprehensive LLM evaluation framework with 9 metrics, multi-model comparison (OpenAI/Anthropic/Cohere/Ollama), prompt A/B testing, and Prometheus monitoring"
+    tags:
+      - "evaluation"
+      - "llmops"
+      - "testing"
+      - "metrics"
+      - "ab-testing"
+      - "monitoring"
+    loc_est: 6526
+    test_coverage: 60
+    known_issues:
+      - "No authentication on evaluation endpoints"
+      - "Sequential evaluation bottleneck (needs parallel)"
+
+  P-09:
+    name: "StreamProcess-Pipeline"
+    category: CAT-04
+    path: "projects/infrastructure/StreamProcess-Pipeline/"
+    status: complete
+    score: 8.0
+    complexity: medium
+    key_files:
+      - "src/ingestion/ingest_service.py"
+      - "src/processing/worker.py"
+      - "src/embedding/embed_service.py"
+      - "src/storage/vector_store.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+    external:
+      - "fastapi"
+      - "celery"
+      - "redis"
+      - "chromadb"
+      - "sentence-transformers"
+      - "prometheus-client"
+    summary: "High-throughput data processing pipeline (10K+ events/sec) with FastAPI ingestion, Celery workers, Redis queuing, and K8s deployment"
+    tags:
+      - "infrastructure"
+      - "streaming"
+      - "celery"
+      - "redis"
+      - "high-throughput"
+      - "kubernetes"
+    loc_est: 5000
+    test_coverage: 55
+    known_issues:
+      - "No dead letter queue for failed tasks"
+      - "Limited error recovery"
+
+  P-10:
+    name: "aiguard"
+    category: CAT-04
+    path: "projects/infrastructure/aiguard/"
+    status: complete
+    score: 7.5
+    complexity: low
+    key_files:
+      - "src/guardrails/prompt_injection/prompt_injection.py"
+      - "src/guardrails/jailbreak/jailbreak_detector.py"
+      - "src/guardrails/pii/pii_detector.py"
+      - "src/middleware/security_middleware.py"
+    depends_on: []
+    shared_libs:
+      - "shared/security.py"
+    external:
+      - "fastapi"
+      - "sentence-transformers"
+      - "spacy"
+      - "presidio"
+    summary: "Security guardrails system for LLM applications protecting against prompt injection, jailbreaking, PII leakage, and encoding attacks"
+    tags:
+      - "infrastructure"
+      - "security"
+      - "prompt-injection"
+      - "jailbreak"
+      - "pii-detection"
+      - "guardrails"
+    loc_est: 3000
+    test_coverage: 50
+    known_issues:
+      - "LLM-based detection optional but slow"
+      - "No rate limiting on middleware"
+
+# ============================================================
+# DEPENDENCY GRAPH (for quick reference)
+# ============================================================
+# shared/security.py -> used by P-01, P-02, P-03, P-04, P-05, P-06, P-07, P-08, P-09, P-10
+# shared/rate_limit.py -> used by P-01, P-05, P-08
+# No cross-project code dependencies (all projects are independently deployable)

@@ -19,9 +19,36 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, status, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, status, BackgroundTasks, WebSocket, WebSocketDisconnect, Request, Depends, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+
+# Shared modules
+from shared.security import SensitiveDataFilter, install_security_filter
+from shared.rate_limit import limiter, rate_limit_exception_handler, RateLimitExceeded
+from shared.auth import (
+    get_current_user,
+    require_role,
+    require_admin,
+    create_access_token,
+    create_refresh_token,
+    verify_token,
+    User,
+    UserCreate,
+    Token,
+    TokenData,
+    Role,
+    InMemoryUserStore,
+)
+from shared.errors import (
+    register_error_handlers,
+    AuthenticationError,
+    AuthorizationError,
+    ValidationError,
+    DatabaseError,
+    ExternalAPIError,
+)
+from shared.secrets import get_settings
 
 from src.agents.fraud_triage_agent import FraudTriageAgent, create_llm
 from src.models.state import AlertDecision, AlertType, RiskLevel
@@ -351,6 +378,18 @@ app.add_middleware(
     allow_headers=APIConfig.ALLOW_HEADERS,
 )
 
+# Install security filter for logs
+install_security_filter()
+
+# Register error handlers
+register_error_handlers(app)
+
+# Register rate limit exception handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
+
+# Get settings
+settings = get_settings()
+
 # Track startup time
 _app_start_time = datetime.utcnow()
 
@@ -485,6 +524,98 @@ class ConnectionManager:
 # Endpoints
 # =============================================================================
 
+# In-memory user store for demo (replace with database in production)
+user_store = InMemoryUserStore()
+
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+@app.post("/auth/register", tags=["Authentication"])
+@limiter.limit("10/hour")
+async def register(
+    user_data: UserCreate,
+    request: Request,
+):
+    """Register a new user."""
+    try:
+        user = await user_store.create_user(user_data)
+        return {
+            "message": "User registered successfully",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role.value,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@app.post("/auth/login", tags=["Authentication"])
+@limiter.limit("20/minute")
+async def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    request: Request = None,
+):
+    """Login and receive access token."""
+    from shared.auth import authenticate_user, login_user
+
+    user = await authenticate_user(username, password, user_store)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_data = await login_user(username, password, user_store)
+    return token_data
+
+
+@app.post("/auth/refresh", tags=["Authentication"])
+@limiter.limit("30/minute")
+async def refresh(
+    refresh_token: str = Form(...),
+    request: Request = None,
+):
+    """Refresh access token."""
+    from shared.auth import refresh_user_token
+
+    token_data = await refresh_user_token(refresh_token, user_store)
+    if not token_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token_data
+
+
+@app.get("/auth/me", tags=["Authentication"])
+@limiter.limit("60/minute")
+async def get_current_user_info(current_user: TokenData = Depends(get_current_user)):
+    """Get current user information."""
+    user = await user_store.get_user_by_id(current_user.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role.value,
+        "is_active": user.is_active,
+    }
+
+
 @app.get("/", response_model=dict)
 async def root() -> dict:
     """
@@ -532,9 +663,11 @@ async def health_check() -> HealthResponse:
 
 
 @app.post("/triage", response_model=TriageResponse, status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("30/minute")
 async def submit_alert(
     request: TriageRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request = None,
 ) -> TriageResponse:
     """
     Submit a fraud alert for triage analysis.

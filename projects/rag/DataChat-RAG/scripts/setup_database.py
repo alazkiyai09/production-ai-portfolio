@@ -7,6 +7,7 @@ Creates PostgreSQL schema and seeds sample data for a healthcare AdTech company.
 
 import os
 import random
+import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
@@ -46,6 +47,47 @@ DATABASE_URL = (
 )
 
 Base = declarative_base()
+
+
+# =============================================================================
+# Security Utilities
+# =============================================================================
+
+VALID_IDENTIFIER_PATTERN = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
+
+def validate_identifier(identifier: str, max_length: int = 63) -> str:
+    """
+    Validate a SQL identifier (table name, column name, database name) to prevent SQL injection.
+
+    PostgreSQL identifiers must:
+    - Start with a letter or underscore
+    - Contain only letters, numbers, and underscores
+    - Be at most 63 characters long
+
+    Args:
+        identifier: The identifier to validate
+        max_length: Maximum allowed length (default: 63 for PostgreSQL)
+
+    Returns:
+        The validated identifier
+
+    Raises:
+        ValueError: If the identifier contains unsafe characters
+    """
+    if not identifier:
+        raise ValueError("Identifier cannot be empty")
+
+    if len(identifier) > max_length:
+        raise ValueError(f"Identifier exceeds maximum length of {max_length} characters")
+
+    if not VALID_IDENTIFIER_PATTERN.match(identifier):
+        raise ValueError(
+            f"Invalid identifier '{identifier}'. "
+            "Identifiers must start with a letter or underscore and contain only letters, numbers, and underscores."
+        )
+
+    return identifier
 
 
 # =============================================================================
@@ -197,13 +239,17 @@ def create_database():
 
     db_name = os.getenv("DB_NAME", "datachat_rag")
 
-    # Check if database exists
-    result = conn.execute(text(f"SELECT 1 FROM pg_database WHERE datname='{db_name}'"))
+    # Check if database exists (using parameterized query for safety)
+    # Note: PostgreSQL doesn't allow parameters for database name in CREATE DATABASE,
+    # so we validate the database name against a whitelist of safe characters
+    safe_db_name = validate_identifier(db_name)
+    result = conn.execute(text("SELECT 1 FROM pg_database WHERE datname = :db_name"), {"db_name": safe_db_name})
     exists = result.fetchone() is not None
 
     if not exists:
-        conn.execute(text(f"CREATE DATABASE {db_name}"))
-        print(f"✓ Database '{db_name}' created")
+        # CREATE DATABASE cannot use parameters in PostgreSQL, but we validated the name
+        conn.execute(text(f"CREATE DATABASE \"{safe_db_name}\""))
+        print(f"✓ Database '{safe_db_name}' created")
     else:
         print(f"✓ Database '{db_name}' already exists")
 

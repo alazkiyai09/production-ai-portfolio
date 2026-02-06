@@ -20,10 +20,37 @@ from pathlib import Path
 from typing import Any, Literal
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status, Request, Depends, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
+
+# Shared modules
+from shared.security import SensitiveDataFilter, install_security_filter
+from shared.rate_limit import limiter, rate_limit_exception_handler, RateLimitExceeded
+from shared.auth import (
+    get_current_user,
+    require_role,
+    require_admin,
+    create_access_token,
+    create_refresh_token,
+    verify_token,
+    User,
+    UserCreate,
+    Token,
+    TokenData,
+    Role,
+    InMemoryUserStore,
+)
+from shared.errors import (
+    register_error_handlers,
+    AuthenticationError,
+    AuthorizationError,
+    ValidationError,
+    DatabaseError,
+    ExternalAPIError,
+)
+from shared.secrets import get_settings
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -426,23 +453,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Install security filter for logs
+install_security_filter()
+
+# Register error handlers
+register_error_handlers(app)
+
+# Register rate limit exception handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
+
+# Get settings
+settings = get_settings()
+
 # ============================================================================
 # Rate Limiting
 # ============================================================================
 
-# TODO: Add rate limiting middleware
-# Recommended libraries:
-# - slowapi (for async rate limiting)
-# - fastapi-limiter (Redis-based)
-#
-# Example using slowapi:
-# from slowapi import Limiter
-# from slowapi.util import get_remote_address
-#
-# limiter = Limiter(key_func=get_remote_address)
-# app.state.limiter = limiter
-#
-# Then add @limiter.limit("100/minute") to endpoint functions
+# Rate limiting is now provided by shared.rate_limit module
+# Use @limiter.limit("100/minute") decorator on endpoints
 
 
 # ============================================================================
@@ -521,6 +549,97 @@ async def general_exception_handler(request, exc):
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
+# In-memory user store for demo (replace with database in production)
+user_store = InMemoryUserStore()
+
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+@app.post("/auth/register", tags=["Authentication"])
+@limiter.limit("10/hour")
+async def register(
+    user_data: UserCreate,
+    request: Request,
+):
+    """Register a new user."""
+    try:
+        user = await user_store.create_user(user_data)
+        return {
+            "message": "User registered successfully",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role.value,
+            }
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@app.post("/auth/login", tags=["Authentication"])
+@limiter.limit("20/minute")
+async def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    request: Request = None,
+):
+    """Login and receive access token."""
+    from shared.auth import authenticate_user, login_user
+
+    user = await authenticate_user(username, password, user_store)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token_data = await login_user(username, password, user_store)
+    return token_data
+
+
+@app.post("/auth/refresh", tags=["Authentication"])
+@limiter.limit("30/minute")
+async def refresh(
+    refresh_token: str = Form(...),
+    request: Request = None,
+):
+    """Refresh access token."""
+    from shared.auth import refresh_user_token
+
+    token_data = await refresh_user_token(refresh_token, user_store)
+    if not token_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token_data
+
+
+@app.get("/auth/me", tags=["Authentication"])
+@limiter.limit("60/minute")
+async def get_current_user_info(current_user: TokenData = Depends(get_current_user)):
+    """Get current user information."""
+    user = await user_store.get_user_by_id(current_user.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role.value,
+        "is_active": user.is_active,
+    }
 
 
 @app.get(
@@ -623,7 +742,8 @@ async def list_collections():
     description="Ask a question and get an answer with source citations",
     tags=["Query"],
 )
-async def query_knowledge_base(request: QueryRequest):
+@limiter.limit("30/minute")
+async def query_knowledge_base(request: QueryRequest, http_request: Request):
     """
     Query the RAG knowledge base.
 
@@ -696,9 +816,11 @@ async def query_knowledge_base(request: QueryRequest):
     description="Upload and process documents into the knowledge base",
     tags=["Ingestion"],
 )
+@limiter.limit("10/minute")
 async def ingest_documents(
     file: UploadFile = File(..., description="Document file to ingest"),
     doc_type: str | None = Form(None, description="Document type override (aml, kyc, fraud, regulation, general)"),
+    http_request: Request = None,
 ):
     """
     Ingest a document into the knowledge base.
