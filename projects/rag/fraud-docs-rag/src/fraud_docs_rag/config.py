@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -423,9 +423,9 @@ class Settings(BaseSettings):
     # =========================================================================
     # Security Settings
     # =========================================================================
-    SECRET_KEY: str = Field(
-        default="change-this-secret-key-in-production",
-        description="Secret key for signing"
+    SECRET_KEY: Optional[str] = Field(
+        default=None,
+        description="Secret key for signing (must be set in production)"
     )
     API_KEY_HEADER: str = Field(
         default="X-API-Key",

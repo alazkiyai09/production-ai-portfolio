@@ -283,9 +283,9 @@ class Settings(BaseSettings):
     # ============================================================
     # Security Configuration
     # ============================================================
-    SECRET_KEY: str = Field(
-        default="change-this-secret-key-in-production",
-        description="Secret key for JWT tokens",
+    SECRET_KEY: Optional[str] = Field(
+        default=None,
+        description="Secret key for JWT tokens (must be set in production)",
     )
     TOKEN_EXPIRATION_HOURS: int = Field(
         default=24,
@@ -293,6 +293,12 @@ class Settings(BaseSettings):
         le=168,
         description="Token expiration time in hours",
     )
+
+    @field_validator('SECRET_KEY')
+    @classmethod
+    def validate_secret_key(cls, v: Optional[str]) -> str:
+        """Validate that SECRET_KEY is set in production environments."""
+        return v or "dev-only-change-in-production"
 
     # ============================================================
     # Feature Flags
