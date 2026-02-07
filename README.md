@@ -39,7 +39,7 @@ This portfolio demonstrates expertise in building enterprise-grade LLM applicati
 | **Average Rating** | 8.45/10 |
 | **Python Files** | 299 production files |
 | **Jupyter Notebooks** | 11 interactive demos |
-| **Automated Tests** | 150+ tests |
+| **Automated Tests** | 32 test files |
 | **Code Lines** | 15,000+ production lines |
 | **Docker Deployments** | 9 containerized projects |
 | **Shared Modules** | 5 (auth, secrets, errors, security, rate_limit) |
@@ -120,7 +120,7 @@ uvicorn src.api.main:app --reload
 - Sentiment analysis with frustration detection
 - WebSocket API for real-time chat
 - Ticket management with escalation workflows
-- 138 comprehensive tests
+- 7 test files
 
 **Tech:** LangGraph, LangChain, ChromaDB, TextBlob, FastAPI, WebSockets
 
@@ -353,7 +353,7 @@ All projects include **enterprise-grade security**:
 - **10** production-ready projects across 4 categories
 - **292** Python files of production code
 - **11** Jupyter notebooks with interactive demos
-- **138+** automated tests
+- **32** test files
 - **8/10** critical security issues resolved
 - **3** shared utility modules created
 
@@ -363,7 +363,7 @@ All projects include **enterprise-grade security**:
 | Enterprise-RAG | Retrieval Accuracy | 95% |
 | Enterprise-RAG | Query Latency | <500ms |
 | StreamProcess-Pipeline | Throughput | 10K+ events/sec |
-| CustomerSupport-Agent | Test Coverage | 138 tests |
+| CustomerSupport-Agent | Test Coverage | 7 test files |
 | LLMOps-Eval | Metrics Implemented | 9 metrics |
 
 ---

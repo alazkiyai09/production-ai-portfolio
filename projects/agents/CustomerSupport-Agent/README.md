@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![LangChain](https://img.shields.io/badge/LangChain-0.1+-green.svg)](https://langchain.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-red.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-138%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-7%20test%20files-brightgreen.svg)](tests/)
 
 ---
 
@@ -223,7 +223,7 @@ Greeting/Feedback           → Friendly direct response
 - **Error Handling**: Graceful failure recovery
 - **Logging**: Comprehensive request/response logging
 - **Type Safety**: Pydantic validation throughout
-- **Tests**: 138 passing tests with good coverage
+- **Tests**: 7 test files with good coverage
 - **Documentation**: Complete API docs and examples
 
 ---
@@ -710,7 +710,7 @@ pytest -v
 | Support Agent | 63% | 28 |
 | API | 50% | 16 |
 
-**Total**: 138 tests passing
+**Total**: 7 test files
 
 ### Integration Tests
 
