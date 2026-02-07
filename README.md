@@ -1,8 +1,10 @@
 <div align="center">
 
-# 🤖 Production AI Portfolio
+# 🤖 Enterprise AI Portfolio
 
-### 10 Enterprise-Grade LLM Applications | RAG • LangGraph Agents • LLMOps • Infrastructure
+### 10 LLM Applications | RAG • LangGraph Agents • LLMOps • Infrastructure
+
+**EDUCATIONAL PORTFOLIO**: This is a learning portfolio demonstrating LLM application patterns. Projects are implementations for learning purposes, not production deployments.
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![LangChain](https://img.shields.io/badge/LangChain-0C4C97?style=flat&logo=langchain)](https://langchain.com/)
@@ -14,9 +16,9 @@
 
 ---
 
-A comprehensive showcase of **production-ready AI engineering projects** demonstrating expertise in RAG systems, LangGraph agents, LLMOps evaluation, and scalable infrastructure.
+A comprehensive portfolio demonstrating **LLM engineering patterns** through implementations of RAG systems, LangGraph agents, LLMOps evaluation, and infrastructure patterns.
 
-**Built with modern LLM stacks** • **Enterprise-grade code** • **Complete documentation**
+**Built for learning** • **Well-documented code** • **Modern architectures**
 
 </div>
 
@@ -24,12 +26,12 @@ A comprehensive showcase of **production-ready AI engineering projects** demonst
 
 ## 🎯 Overview
 
-This portfolio demonstrates expertise in building enterprise-grade LLM applications, featuring:
+This portfolio demonstrates learning in building LLM applications, featuring:
 
-- **RAG Systems** with hybrid retrieval and multi-modal search
-- **LangGraph Agents** with state machines and tool calling
-- **LLMOps** evaluation frameworks and A/B testing
-- **Infrastructure** for high-throughput processing and AI safety
+- **RAG Systems** with hybrid retrieval and multi-modal search (educational implementations)
+- **LangGraph Agents** with state machines and tool calling (learning projects)
+- **LLMOps** evaluation frameworks and metrics tracking (demonstration code)
+- **Infrastructure** patterns for high-throughput processing (architectural templates)
 
 ## 📊 Portfolio Stats
 
